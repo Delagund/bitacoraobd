@@ -20,4 +20,4 @@ El MVP prioriza el funcionamiento offline y la persistencia local. La comunicaci
 
 La información de los DTC es orientativa: un código por sí solo no confirma una avería mecánica. El alcance no incluye cuentas, sincronización en la nube, borrado o reprogramación de ECU ni diagnóstico de sistemas propietarios como ABS o airbags.
 
-El alcance funcional y las decisiones del proyecto están documentados en [Contexto Maestro](plans/Contexto_Maestro_App_OBDII_v2.md).
+
