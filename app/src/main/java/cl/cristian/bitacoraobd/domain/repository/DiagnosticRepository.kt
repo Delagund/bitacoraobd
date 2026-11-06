@@ -8,7 +8,10 @@ interface DiagnosticRepository {
     fun observeSessionsByVehicle(vehicleId: Long): Flow<List<DiagnosticSession>>
     suspend fun getLatestSession(vehicleId: Long): DiagnosticSession?
     suspend fun getSessionById(sessionId: Long): DiagnosticSession?
-    suspend fun saveDiagnosticSession(session: DiagnosticSession): Long
+
+    /** Persists the successful scan and advances the odometer in the same database transaction. */
+    suspend fun saveDiagnosticSessionAndAdvanceMileage(session: DiagnosticSession): Long
+
     suspend fun getSuccessfulCodesBefore(
         vehicleId: Long,
         timestampMillis: Long,
