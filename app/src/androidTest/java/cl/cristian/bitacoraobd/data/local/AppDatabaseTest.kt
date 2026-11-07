@@ -59,6 +59,7 @@ class AppDatabaseTest {
 
         assertNull(database.vehicleDao().getById(vehicleId))
         assertEquals(emptyList<DiagnosticSessionEntity>(), database.diagnosticDao().sessions(vehicleId))
+        assertNull(database.diagnosticDao().sessionById(sessionId))
         assertEquals(emptyList<MaintenanceRecordEntity>(), database.maintenanceDao().observeByVehicle(vehicleId).first())
     }
 
@@ -83,14 +84,14 @@ class AppDatabaseTest {
         val diagnostics = cl.cristian.bitacoraobd.data.repository.RoomDiagnosticRepository(database)
         val maintenance = cl.cristian.bitacoraobd.data.repository.RoomMaintenanceRepository(database)
 
-        runCatching {
+        val diagnosticFailure = runCatching {
             diagnostics.saveDiagnosticSessionAndAdvanceMileage(
                 cl.cristian.bitacoraobd.domain.model.DiagnosticSession(
                     vehicleId = vehicleId, timestampMillis = 1L, mileageAtScanKm = 20, codes = listOf("P0123")
                 )
             )
         }
-        runCatching {
+        val maintenanceFailure = runCatching {
             maintenance.saveMaintenanceRecord(
                 cl.cristian.bitacoraobd.domain.model.MaintenanceRecord(
                     vehicleId = vehicleId, serviceType = MaintenanceType.OIL_ONLY,
@@ -100,10 +101,187 @@ class AppDatabaseTest {
             )
         }
 
+        assertEquals(true, diagnosticFailure.isFailure)
+        assertEquals(true, maintenanceFailure.isFailure)
         assertEquals(emptyList<DiagnosticSessionEntity>(), database.diagnosticDao().sessions(vehicleId))
         assertEquals(emptyList<MaintenanceRecordEntity>(), database.maintenanceDao().observeByVehicle(vehicleId).first())
         assertEquals(10, database.vehicleDao().getById(vehicleId)?.currentMileageKm)
     }
+
+    @Test
+    fun diagnosticQueriesKeepSessionsCodesOrderingAndVehicleIsolation() = runBlocking {
+        val vehicleId = database.vehicleDao().insert(vehicle())
+        val otherVehicleId = database.vehicleDao().insert(vehicle().copy(brand = "Other"))
+        val oldId = database.diagnosticDao().insertSession(
+            DiagnosticSessionEntity(vehicleId = vehicleId, timestampMillis = 1L, mileageAtScanKm = 10)
+        )
+        val emptyId = database.diagnosticDao().insertSession(
+            DiagnosticSessionEntity(vehicleId = vehicleId, timestampMillis = 0L, mileageAtScanKm = 10)
+        )
+        val firstId = database.diagnosticDao().insertSession(
+            DiagnosticSessionEntity(vehicleId = vehicleId, timestampMillis = 2L, mileageAtScanKm = 10)
+        )
+        val latestId = database.diagnosticDao().insertSession(
+            DiagnosticSessionEntity(vehicleId = vehicleId, timestampMillis = 2L, mileageAtScanKm = 10)
+        )
+        val otherVehicleSessionId = database.diagnosticDao().insertSession(
+            DiagnosticSessionEntity(vehicleId = otherVehicleId, timestampMillis = 3L, mileageAtScanKm = 10)
+        )
+        database.diagnosticDao().insertCodes(
+            listOf(
+                DiagnosticCodeEntity(oldId, "P0123"),
+                DiagnosticCodeEntity(firstId, "P0123"),
+                DiagnosticCodeEntity(firstId, "P0789"),
+                DiagnosticCodeEntity(latestId, "P0456"),
+                DiagnosticCodeEntity(otherVehicleSessionId, "P0123")
+            )
+        )
+
+        val sessions = database.diagnosticDao().observeSessions(vehicleId).first()
+        assertEquals(listOf(latestId, firstId, oldId, emptyId), sessions.map { it.session.id })
+        assertEquals(listOf("P0456"), sessions.first().codes.map { it.code })
+        assertEquals(emptyList<DiagnosticCodeEntity>(), sessions.last().codes)
+        assertEquals(
+            setOf("P0123", "P0789"),
+            database.diagnosticDao().codesBefore(vehicleId, 2L, latestId).toSet()
+        )
+        assertEquals(
+            setOf("P0123"),
+            database.diagnosticDao().codesBefore(vehicleId, 2L, firstId).toSet()
+        )
+        assertEquals(2, database.diagnosticDao().occurrenceCounts(vehicleId).single { it.code == "P0123" }.count)
+    }
+
+    @Test
+    fun maintenanceQueriesChooseLatestPerTypeByDateThenIdAndExcludeOther() = runBlocking {
+        val vehicleId = database.vehicleDao().insert(vehicle())
+        database.maintenanceDao().insert(maintenance(vehicleId, MaintenanceType.OIL_ONLY, 10L))
+        database.maintenanceDao().insert(maintenance(vehicleId, MaintenanceType.OIL_ONLY, 20L))
+        val tiedNewerId = database.maintenanceDao().insert(maintenance(vehicleId, MaintenanceType.OIL_ONLY, 20L))
+        val filterId = database.maintenanceDao().insert(maintenance(vehicleId, MaintenanceType.FILTER_ONLY, 15L))
+        database.maintenanceDao().insert(maintenance(vehicleId, MaintenanceType.OTHER, 30L))
+
+        val latest = database.maintenanceDao().latestAlertable(vehicleId)
+
+        assertEquals(setOf(tiedNewerId, filterId), latest.map { it.id }.toSet())
+        assertEquals(tiedNewerId, latest.first { it.serviceType == MaintenanceType.OIL_ONLY }.id)
+    }
+
+    @Test
+    fun maintenanceMileageHistoryDoesNotLowerOdometerButHigherMileageAdvancesIt() = runBlocking {
+        val vehicleId = database.vehicleDao().insert(vehicle().copy(currentMileageKm = 50_000))
+        val maintenance = cl.cristian.bitacoraobd.data.repository.RoomMaintenanceRepository(database)
+
+        maintenance.saveMaintenanceRecord(
+            cl.cristian.bitacoraobd.domain.model.MaintenanceRecord(
+                vehicleId = vehicleId, serviceType = MaintenanceType.OIL_ONLY,
+                performedDate = java.time.LocalDate.of(2025, 1, 1), mileageAtServiceKm = 40_000
+            )
+        )
+        assertEquals(50_000, database.vehicleDao().getById(vehicleId)?.currentMileageKm)
+
+        maintenance.saveMaintenanceRecord(
+            cl.cristian.bitacoraobd.domain.model.MaintenanceRecord(
+                vehicleId = vehicleId, serviceType = MaintenanceType.FILTER_ONLY,
+                performedDate = java.time.LocalDate.of(2025, 2, 1), mileageAtServiceKm = 60_000
+            )
+        )
+        assertEquals(60_000, database.vehicleDao().getById(vehicleId)?.currentMileageKm)
+
+        database.vehicleDao().update(vehicle().copy(id = vehicleId, currentMileageKm = 35_000))
+        assertEquals(35_000, database.vehicleDao().getById(vehicleId)?.currentMileageKm)
+    }
+
+    @Test
+    fun sqliteEnforcesForeignKeysAndUniqueDiagnosticCodes() = runBlocking {
+        val vehicleId = database.vehicleDao().insert(vehicle())
+        val sessionId = database.diagnosticDao().insertSession(
+            DiagnosticSessionEntity(vehicleId = vehicleId, timestampMillis = 1L, mileageAtScanKm = 10)
+        )
+        database.diagnosticDao().insertCodes(listOf(DiagnosticCodeEntity(sessionId, "P0123")))
+
+        val duplicateRejected = runCatching {
+            database.diagnosticDao().insertCodes(listOf(DiagnosticCodeEntity(sessionId, "P0123")))
+        }.isFailure
+        val orphanRejected = runCatching {
+            database.diagnosticDao().insertSession(
+                DiagnosticSessionEntity(vehicleId = Long.MAX_VALUE, timestampMillis = 2L, mileageAtScanKm = 10)
+            )
+        }.isFailure
+
+        assertEquals(true, duplicateRejected)
+        assertEquals(true, orphanRejected)
+    }
+
+    @Test
+    fun sqliteMetadataMatchesForeignKeysPrimaryKeysAndRoomIndexes() = runBlocking {
+        val sqlite = database.openHelper.writableDatabase
+
+        fun rows(query: String, columns: Int): List<List<String?>> =
+            sqlite.query(query).use { cursor ->
+                buildList {
+                    while (cursor.moveToNext()) {
+                        add((0 until columns).map { index ->
+                            if (cursor.isNull(index)) null else cursor.getString(index)
+                        })
+                    }
+                }
+            }
+
+        val sessionForeignKey = rows("PRAGMA foreign_key_list(diagnostic_sessions)", 8).single()
+        assertEquals("vehicles", sessionForeignKey[2])
+        assertEquals("vehicleId", sessionForeignKey[3])
+        assertEquals("id", sessionForeignKey[4])
+        assertEquals("CASCADE", sessionForeignKey[6])
+
+        val codeForeignKey = rows("PRAGMA foreign_key_list(diagnostic_codes)", 8).single()
+        assertEquals("diagnostic_sessions", codeForeignKey[2])
+        assertEquals("sessionId", codeForeignKey[3])
+        assertEquals("id", codeForeignKey[4])
+        assertEquals("CASCADE", codeForeignKey[6])
+
+        val maintenanceForeignKey = rows("PRAGMA foreign_key_list(maintenance_records)", 8).single()
+        assertEquals("vehicles", maintenanceForeignKey[2])
+        assertEquals("vehicleId", maintenanceForeignKey[3])
+        assertEquals("id", maintenanceForeignKey[4])
+        assertEquals("CASCADE", maintenanceForeignKey[6])
+
+        val codePrimaryKey = rows("PRAGMA table_info(diagnostic_codes)", 6)
+            .filter { it[5] != "0" }
+            .sortedBy { it[5]!!.toInt() }
+        assertEquals(listOf("sessionId", "code"), codePrimaryKey.map { it[1] })
+
+        fun indexColumns(table: String): Set<List<String>> {
+            val names = rows("PRAGMA index_list($table)", 5).map { it[1] }
+            return names.map { indexName ->
+                rows("PRAGMA index_info($indexName)", 5).sortedBy { it[0]!!.toInt() }.mapNotNull { it[2] }
+            }.toSet()
+        }
+
+        assertEquals(setOf(listOf("vehicleId")), indexColumns("diagnostic_sessions"))
+        assertEquals(
+            setOf(listOf("sessionId"), listOf("sessionId", "code")),
+            indexColumns("diagnostic_codes")
+        )
+        assertEquals(
+            setOf(
+                listOf("vehicleId"),
+                listOf("vehicleId", "serviceType", "performedDateEpochDay", "id")
+            ),
+            indexColumns("maintenance_records")
+        )
+    }
+
+    private fun maintenance(vehicleId: Long, type: MaintenanceType, day: Long) =
+        MaintenanceRecordEntity(
+            vehicleId = vehicleId,
+            serviceType = type,
+            performedDateEpochDay = day,
+            mileageAtServiceKm = 10,
+            notes = "",
+            nextDueDateEpochDay = null,
+            nextDueMileageKm = null
+        )
 
     private fun vehicle() = VehicleEntity(
         brand = "A", model = "B", year = 2020, fuelType = "Gasoline",

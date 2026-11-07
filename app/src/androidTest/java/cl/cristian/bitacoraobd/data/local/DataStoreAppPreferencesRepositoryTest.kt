@@ -36,6 +36,10 @@ class DataStoreAppPreferencesRepositoryTest {
 
         assertEquals(11L, repository.activeVehicleId.first())
         assertEquals(config, repository.obdConnectionConfig.first())
+
+        repository.setActiveVehicleId(null)
+
+        assertEquals(null, repository.activeVehicleId.first())
         file.delete()
         Unit
     }

@@ -51,6 +51,38 @@ class MaintenanceDashboardDeleteUseCasesTest {
     }
 
     @Test
+    fun saveMaintenanceConfirmedHistoricalMileageSavesRecord() = runBlocking {
+        val vehicle = vehicle(1, 50_000)
+        val maintenance = TestMaintenance()
+        val record = MaintenanceRecord(
+            vehicleId = vehicle.id, serviceType = MaintenanceType.OIL_ONLY,
+            performedDate = LocalDate.of(2025, 1, 1), mileageAtServiceKm = 40_000
+        )
+
+        val result = SaveMaintenanceUseCase(TestVehicles(listOf(vehicle)), maintenance)(
+            record, confirmHistoricalMileage = true
+        )
+
+        assertEquals(SaveMaintenanceResult.Saved(1L), result)
+        assertEquals(listOf(record), maintenance.savedRecords)
+    }
+
+    @Test
+    fun saveMaintenanceHigherMileageSavesWithoutConfirmation() = runBlocking {
+        val vehicle = vehicle(1, 50_000)
+        val maintenance = TestMaintenance()
+        val record = MaintenanceRecord(
+            vehicleId = vehicle.id, serviceType = MaintenanceType.FILTER_ONLY,
+            performedDate = LocalDate.of(2025, 1, 1), mileageAtServiceKm = 60_000
+        )
+
+        val result = SaveMaintenanceUseCase(TestVehicles(listOf(vehicle)), maintenance)(record)
+
+        assertEquals(SaveMaintenanceResult.Saved(1L), result)
+        assertEquals(listOf(record), maintenance.savedRecords)
+    }
+
+    @Test
     fun deleteActiveVehicleSelectsRemainingVehicle() = runBlocking {
         val vehicles = TestVehicles(listOf(vehicle(1), vehicle(2)))
         val preferences = TestPreferences(1L)
@@ -113,6 +145,109 @@ class MaintenanceDashboardDeleteUseCasesTest {
 
         val summaries = emissions.map { (it as DashboardState.Ready).summary }
         assertEquals(listOf(1L, 2L), summaries.map { it.activeVehicle.id })
+    }
+
+    @Test
+    fun deleteNonActiveKeepsSelectionAndLastActiveClearsIt() = runBlocking {
+        val vehicles = TestVehicles(listOf(vehicle(1), vehicle(2)))
+        val preferences = TestPreferences(1L)
+        val useCase = DeleteVehicleUseCase(vehicles, preferences, TestGateway())
+
+        assertEquals(DeleteVehicleResult.Deleted, useCase(2L))
+        assertEquals(1L, preferences.activeVehicleId.first())
+        assertEquals(DeleteVehicleResult.Deleted, useCase(1L))
+        assertEquals(emptyList<Long>(), vehicles.values.value.map { it.id })
+        assertEquals(null, preferences.activeVehicleId.first())
+    }
+
+    @Test
+    fun deleteMissingVehicleDoesNotChangeSelectionOrRows() = runBlocking {
+        val vehicles = TestVehicles(listOf(vehicle(1)))
+        val preferences = TestPreferences(1L)
+
+        assertEquals(DeleteVehicleResult.NotFound, DeleteVehicleUseCase(vehicles, preferences, TestGateway())(2L))
+        assertEquals(listOf(1L), vehicles.values.value.map { it.id })
+        assertEquals(1L, preferences.activeVehicleId.first())
+    }
+
+    @Test
+    fun dashboardReactsToVehicleConnectionAndMaintenanceUpdates() = runTest {
+        val vehicles = TestVehicles(listOf(vehicle(1, 40_000)))
+        val preferences = TestPreferences(1L)
+        val gateway = TestGateway()
+        val maintenance = TestMaintenance()
+        val emissions = mutableListOf<DashboardState>()
+        val job = launch {
+            dashboard(vehicles, preferences, gateway, TestDiagnostics(), maintenance)()
+                .take(4).toList(emissions)
+        }
+        runCurrent()
+        vehicles.values.value = listOf(vehicle(1, 45_000))
+        runCurrent()
+        gateway.connectionState.value = ObdConnectionState.Connected(ObdConnectionConfig())
+        runCurrent()
+        maintenance.records[1L]!!.value = listOf(
+            MaintenanceRecord(
+                vehicleId = 1L, serviceType = MaintenanceType.OIL_ONLY,
+                performedDate = LocalDate.of(1969, 1, 1), mileageAtServiceKm = 40_000,
+                nextDueDate = LocalDate.of(1969, 2, 1)
+            )
+        )
+        runCurrent()
+        job.cancel()
+
+        val summaries = emissions.map { (it as DashboardState.Ready).summary }
+        assertEquals(4, summaries.size)
+        assertEquals(40_000, summaries[0].activeVehicle.currentMileageKm)
+        assertEquals(45_000, summaries[1].activeVehicle.currentMileageKm)
+        assertEquals(ObdConnectionState.Connected(ObdConnectionConfig()), summaries[2].connectionState)
+        assertEquals(1, summaries[3].activeMaintenanceSchedules.size)
+    }
+
+    @Test
+    fun dashboardSwitchingVehiclesDoesNotCarryPreviousVehicleData() = runTest {
+        val vehicles = TestVehicles(listOf(vehicle(1), vehicle(2)))
+        val preferences = TestPreferences(1L)
+        val maintenance = TestMaintenance().apply {
+            records.getValue(1L).value = listOf(
+                MaintenanceRecord(
+                    vehicleId = 1L, serviceType = MaintenanceType.OIL_ONLY,
+                    performedDate = LocalDate.of(1969, 1, 1), mileageAtServiceKm = 40_000,
+                    nextDueDate = LocalDate.of(1969, 2, 1)
+                )
+            )
+        }
+        val emissions = mutableListOf<DashboardState>()
+        val job = launch {
+            dashboard(vehicles, preferences, TestGateway(), TestDiagnostics(), maintenance)()
+                .take(2).toList(emissions)
+        }
+        runCurrent()
+        preferences.activeIdFlow.value = 2L
+        runCurrent()
+        job.cancel()
+
+        val summaries = emissions.map { (it as DashboardState.Ready).summary }
+        assertEquals(1, summaries.first().activeMaintenanceSchedules.size)
+        assertTrue(summaries.last().activeMaintenanceSchedules.isEmpty())
+    }
+
+    @Test
+    fun deleteActiveVehicleKeepsVehicleWhenPreferenceUpdateFails() = runTest {
+        val vehicle = vehicle(1)
+        val vehicles = TestVehicles(listOf(vehicle))
+        val preferences = TestPreferences(vehicle.id).apply { failNextSelectionUpdate = true }
+        val useCase = DeleteVehicleUseCase(vehicles, preferences, TestGateway())
+
+        val deletionResult = runCatching { useCase(vehicle.id) }
+
+        assertTrue(deletionResult.isFailure)
+        assertEquals(listOf(vehicle), vehicles.values.value)
+        assertEquals(vehicle.id, preferences.activeVehicleId.first())
+        val state = dashboard(
+            vehicles, preferences, TestGateway(), TestDiagnostics(), TestMaintenance()
+        )().first() as DashboardState.Ready
+        assertEquals(vehicle.id, state.summary.activeVehicle.id)
     }
 
     @Test
@@ -183,21 +318,33 @@ private class TestVehicles(initial: List<Vehicle>) : VehicleRepository {
 
 private class TestPreferences(activeId: Long?) : AppPreferencesRepository {
     val activeIdFlow = MutableStateFlow(activeId)
+    var failNextSelectionUpdate = false
     override val activeVehicleId: MutableStateFlow<Long?> = activeIdFlow
     override val obdConnectionConfig = MutableStateFlow(ObdConnectionConfig())
-    override suspend fun setActiveVehicleId(vehicleId: Long?) { activeVehicleId.value = vehicleId }
+    override suspend fun setActiveVehicleId(vehicleId: Long?) {
+        if (failNextSelectionUpdate) {
+            failNextSelectionUpdate = false
+            error("DataStore write failed")
+        }
+        activeVehicleId.value = vehicleId
+    }
     override suspend fun saveObdConnectionConfig(config: ObdConnectionConfig) { obdConnectionConfig.value = config }
 }
 
 private class TestMaintenance : MaintenanceRepository {
     val savedRecords = mutableListOf<MaintenanceRecord>()
-    override fun observeMaintenanceByVehicle(vehicleId: Long): Flow<List<MaintenanceRecord>> = flowOf(emptyList())
+    val records = mutableMapOf<Long, MutableStateFlow<List<MaintenanceRecord>>>(
+        1L to MutableStateFlow(emptyList()),
+        2L to MutableStateFlow(emptyList())
+    )
+    override fun observeMaintenanceByVehicle(vehicleId: Long): Flow<List<MaintenanceRecord>> =
+        records.getOrPut(vehicleId) { MutableStateFlow(emptyList()) }
     override suspend fun getMaintenanceById(recordId: Long): MaintenanceRecord? = null
     override suspend fun saveMaintenanceRecord(record: MaintenanceRecord): Long {
         savedRecords += record
         return savedRecords.size.toLong()
     }
-    override suspend fun getLatestRecordsPerAlertableType(vehicleId: Long): List<MaintenanceRecord> = emptyList()
+    override suspend fun getLatestRecordsPerAlertableType(vehicleId: Long): List<MaintenanceRecord> = records[vehicleId]?.value.orEmpty().filter { it.serviceType.supportsAutoAlerts }
 }
 
 private class TestDiagnostics : DiagnosticRepository {

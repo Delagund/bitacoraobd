@@ -23,10 +23,11 @@ class DeleteVehicleUseCase(
         }
         if (vehicles.getVehicleById(vehicleId) == null) return DeleteVehicleResult.NotFound
         val wasActive = preferences.activeVehicleId.first() == vehicleId
-        vehicles.deleteVehicle(vehicleId)
         if (wasActive) {
-            preferences.setActiveVehicleId(vehicles.observeVehicles().first().firstOrNull()?.id)
+            val nextActiveId = vehicles.observeVehicles().first().firstOrNull { it.id != vehicleId }?.id
+            preferences.setActiveVehicleId(nextActiveId)
         }
+        vehicles.deleteVehicle(vehicleId)
         return DeleteVehicleResult.Deleted
     }
 }
