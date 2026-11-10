@@ -23,12 +23,23 @@ class RoomDiagnosticRepository(private val db: AppDatabase) : DiagnosticReposito
         db.withTransaction {
             val vehicle = db.vehicleDao().getById(session.vehicleId)
                 ?: throw IllegalArgumentException("Vehicle does not exist")
-            val sessionId = dao.insertSession(session.copy(id = 0L).toEntity())
+            val insertedId = dao.insertSession(session.copy(id = 0L).toEntity())
+            if (insertedId == -1L) {
+                val existing = dao.sessionByCaptureId(session.captureId)
+                    ?: error("Conflicting diagnostic capture was not found")
+                val sameCapture = existing.session.vehicleId == session.vehicleId &&
+                    existing.session.timestampMillis == session.timestampMillis &&
+                    existing.session.mileageAtScanKm == session.mileageAtScanKm &&
+                    existing.codes.map { it.code }.toSet() == session.codes.toSet()
+                require(sameCapture) { "Capture id already belongs to different diagnostic data" }
+                return@withTransaction existing.session.id
+            }
+
             if (session.codes.isNotEmpty()) {
-                dao.insertCodes(session.codes.distinct().map { DiagnosticCodeEntity(sessionId, it) })
+                dao.insertCodes(session.codes.distinct().map { DiagnosticCodeEntity(insertedId, it) })
             }
             db.vehicleDao().advanceMileage(session.vehicleId, maxOf(vehicle.currentMileageKm, session.mileageAtScanKm))
-            sessionId
+            insertedId
         }
 
     override suspend fun getSuccessfulCodesBefore(vehicleId: Long, timestampMillis: Long, sessionId: Long) =

@@ -11,7 +11,8 @@ class SaveDiagnosticSessionUseCase(private val diagnostics: DiagnosticRepository
                 vehicleId = result.vehicleId,
                 timestampMillis = result.timestampMillis,
                 mileageAtScanKm = result.mileageAtScanKm,
-                codes = result.codes
+                codes = result.codes,
+                captureId = result.captureId
             )
         )
     }

@@ -9,8 +9,8 @@ import java.time.LocalDate
 fun VehicleEntity.toDomain() = Vehicle(id, brand, model, year, fuelType, engineDescription, currentMileageKm)
 fun Vehicle.toEntity() = VehicleEntity(id, brand, model, year, fuelType, engineDescription, currentMileageKm)
 fun DiagnosticSessionWithCodes.toDomain() =
-    DiagnosticSession(session.id, session.vehicleId, session.timestampMillis, session.mileageAtScanKm, codes.map { it.code })
-fun DiagnosticSession.toEntity() = DiagnosticSessionEntity(id, vehicleId, timestampMillis, mileageAtScanKm)
+    DiagnosticSession(session.id, session.vehicleId, session.timestampMillis, session.mileageAtScanKm, codes.map { it.code }, session.captureId)
+fun DiagnosticSession.toEntity() = DiagnosticSessionEntity(id, vehicleId, timestampMillis, mileageAtScanKm, captureId)
 fun MaintenanceRecordEntity.toDomain() =
     MaintenanceRecord(id, vehicleId, serviceType, LocalDate.ofEpochDay(performedDateEpochDay), mileageAtServiceKm, notes, nextDueDateEpochDay?.let(LocalDate::ofEpochDay), nextDueMileageKm)
 fun MaintenanceRecord.toEntity() =

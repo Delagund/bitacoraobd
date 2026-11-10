@@ -5,11 +5,13 @@ import cl.cristian.bitacoraobd.domain.obd.ObdGateway
 import cl.cristian.bitacoraobd.domain.repository.AppPreferencesRepository
 import cl.cristian.bitacoraobd.domain.repository.VehicleRepository
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.CancellationException
 
 sealed interface DeleteVehicleResult {
     data object Deleted : DeleteVehicleResult
     data object Connected : DeleteVehicleResult
     data object NotFound : DeleteVehicleResult
+    data object Failed : DeleteVehicleResult
 }
 
 class DeleteVehicleUseCase(
@@ -21,13 +23,19 @@ class DeleteVehicleUseCase(
         if (gateway.connectionState.value is ObdConnectionState.Connected) {
             return DeleteVehicleResult.Connected
         }
-        if (vehicles.getVehicleById(vehicleId) == null) return DeleteVehicleResult.NotFound
-        val wasActive = preferences.activeVehicleId.first() == vehicleId
-        if (wasActive) {
-            val nextActiveId = vehicles.observeVehicles().first().firstOrNull { it.id != vehicleId }?.id
-            preferences.setActiveVehicleId(nextActiveId)
+        return try {
+            if (vehicles.getVehicleById(vehicleId) == null) return DeleteVehicleResult.NotFound
+            val wasActive = preferences.activeVehicleId.first() == vehicleId
+            if (wasActive) {
+                val nextActiveId = vehicles.observeVehicles().first().firstOrNull { it.id != vehicleId }?.id
+                preferences.setActiveVehicleId(nextActiveId)
+            }
+            vehicles.deleteVehicle(vehicleId)
+            DeleteVehicleResult.Deleted
+        } catch (exception: CancellationException) {
+            throw exception
+        } catch (exception: Exception) {
+            DeleteVehicleResult.Failed
         }
-        vehicles.deleteVehicle(vehicleId)
-        return DeleteVehicleResult.Deleted
     }
 }

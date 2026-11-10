@@ -7,6 +7,9 @@ import androidx.test.core.app.ApplicationProvider
 import android.content.Context
 import cl.cristian.bitacoraobd.data.local.datastore.DataStoreAppPreferencesRepository
 import cl.cristian.bitacoraobd.domain.obd.ObdConnectionConfig
+import cl.cristian.bitacoraobd.domain.model.AppSettings
+import cl.cristian.bitacoraobd.domain.model.DistanceUnit
+import cl.cristian.bitacoraobd.domain.model.TemperatureUnit
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -30,16 +33,23 @@ class DataStoreAppPreferencesRepositoryTest {
 
         assertEquals(null, repository.activeVehicleId.first())
         assertEquals(ObdConnectionConfig(), repository.obdConnectionConfig.first())
+        assertEquals(AppSettings(), repository.settings.first())
 
         repository.setActiveVehicleId(11L)
         repository.saveObdConnectionConfig(config)
+        val settings = AppSettings("Mi auto", DistanceUnit.MILES, TemperatureUnit.FAHRENHEIT, false, false, true)
+        repository.saveSettings(settings)
 
         assertEquals(11L, repository.activeVehicleId.first())
         assertEquals(config, repository.obdConnectionConfig.first())
+        assertEquals(settings, repository.settings.first())
 
         repository.setActiveVehicleId(null)
 
         assertEquals(null, repository.activeVehicleId.first())
+        repository.saveSettings(settings.copy(displayName = null))
+        assertEquals(null, repository.settings.first().displayName)
+        assertEquals(config, repository.obdConnectionConfig.first())
         file.delete()
         Unit
     }

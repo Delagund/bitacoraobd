@@ -9,7 +9,7 @@ interface DiagnosticRepository {
     suspend fun getLatestSession(vehicleId: Long): DiagnosticSession?
     suspend fun getSessionById(sessionId: Long): DiagnosticSession?
 
-    /** Persists the successful scan and advances the odometer in the same database transaction. */
+    /** Idempotently persists a capture and advances the odometer in the same database transaction. */
     suspend fun saveDiagnosticSessionAndAdvanceMileage(session: DiagnosticSession): Long
 
     suspend fun getSuccessfulCodesBefore(

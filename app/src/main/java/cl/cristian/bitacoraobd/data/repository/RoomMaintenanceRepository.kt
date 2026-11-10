@@ -19,8 +19,18 @@ class RoomMaintenanceRepository(private val db: AppDatabase) : MaintenanceReposi
     override suspend fun saveMaintenanceRecord(record: MaintenanceRecord): Long = db.withTransaction {
         val vehicle = db.vehicleDao().getById(record.vehicleId)
             ?: throw IllegalArgumentException("Vehicle does not exist")
-        val id = dao.insert(record.copy(id = 0L).toEntity())
-        db.vehicleDao().advanceMileage(record.vehicleId, maxOf(vehicle.currentMileageKm, record.mileageAtServiceKm))
+        val id = if (record.id == 0L) {
+            dao.insert(record.toEntity())
+        } else {
+            val existing = dao.getById(record.id)
+                ?: throw IllegalArgumentException("Maintenance record does not exist")
+            require(existing.vehicleId == record.vehicleId) { "Cannot change maintenance vehicle" }
+            check(dao.update(record.toEntity()) == 1) { "Maintenance record was not updated" }
+            record.id
+        }
+        if (record.id == 0L) {
+            db.vehicleDao().advanceMileage(record.vehicleId, maxOf(vehicle.currentMileageKm, record.mileageAtServiceKm))
+        }
         id
     }
 

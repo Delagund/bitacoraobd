@@ -3,6 +3,7 @@ package cl.cristian.bitacoraobd.data.local.dao
 import androidx.room.Dao
 import androidx.room.Embedded
 import androidx.room.Insert
+import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Relation
 import androidx.room.Transaction
@@ -30,8 +31,12 @@ interface DiagnosticDao {
     @Query("SELECT code, COUNT(DISTINCT sessionId) AS count FROM diagnostic_codes WHERE sessionId IN (SELECT id FROM diagnostic_sessions WHERE vehicleId = :vehicleId) GROUP BY code")
     suspend fun occurrenceCounts(vehicleId: Long): List<CodeCount>
 
-    @Insert
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun insertSession(session: DiagnosticSessionEntity): Long
+
+    @Transaction
+    @Query("SELECT * FROM diagnostic_sessions WHERE captureId = :captureId")
+    suspend fun sessionByCaptureId(captureId: String): DiagnosticSessionWithCodes?
 
     @Insert
     suspend fun insertCodes(codes: List<DiagnosticCodeEntity>)

@@ -15,7 +15,7 @@ import cl.cristian.bitacoraobd.domain.model.MaintenanceType
 
 @Database(
     entities = [VehicleEntity::class, DiagnosticSessionEntity::class, DiagnosticCodeEntity::class, MaintenanceRecordEntity::class],
-    version = 1,
+    version = 2,
     exportSchema = true
 )
 @TypeConverters(DatabaseConverters::class)

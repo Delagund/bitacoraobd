@@ -21,8 +21,8 @@ class EntityMappersTest {
 
     @Test
     fun diagnosticSessionMapsInBothDirectionsAndKeepsCodeCollections() {
-        val session = DiagnosticSession(3L, 7L, 1234L, 45_000, listOf("P0123", "P0456"))
-        val entity = DiagnosticSessionEntity(3L, 7L, 1234L, 45_000)
+        val session = DiagnosticSession(3L, 7L, 1234L, 45_000, listOf("P0123", "P0456"), "capture-1")
+        val entity = DiagnosticSessionEntity(3L, 7L, 1234L, 45_000, "capture-1")
         val withCodes = DiagnosticSessionWithCodes(
             entity,
             listOf(DiagnosticCodeEntity(3L, "P0123"), DiagnosticCodeEntity(3L, "P0456"))
@@ -31,7 +31,7 @@ class EntityMappersTest {
         assertEquals(entity, session.toEntity())
         assertEquals(session, withCodes.toDomain())
         assertEquals(
-            DiagnosticSession(3L, 7L, 1234L, 45_000, emptyList()),
+            DiagnosticSession(3L, 7L, 1234L, 45_000, emptyList(), "capture-1"),
             withCodes.copy(codes = emptyList()).toDomain()
         )
     }

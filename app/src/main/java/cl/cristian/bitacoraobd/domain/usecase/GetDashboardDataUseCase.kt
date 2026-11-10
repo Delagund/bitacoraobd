@@ -40,16 +40,9 @@ class GetDashboardDataUseCase(
             }.mapLatest { (sessions, connection, activeVehicle) ->
                 val latest = sessions.firstOrNull()
                 val analyzed = latest?.let { analyzeHistory(it) }.orEmpty()
-                val recurrent = analyzed.filter { it.isRecurrent }
                 val statuses = maintenanceStatus(activeVehicle.id)
-                val counts = diagnostics.getSuccessfulCodeOccurrenceCounts(activeVehicle.id)
-                val alerts = buildList {
-                    recurrent.forEach { dtc ->
-                        add(VehicleAlert.RecurrentDtcAlert(dtc.code, dtc.guidance.description, counts[dtc.code] ?: 0))
-                    }
-                    statuses.filter { it.status != MaintenanceStatus.UNSCHEDULED }.forEach {
-                        add(VehicleAlert.MaintenanceAlert(it.record.serviceType, it.status, it.record.nextDueDate, it.record.nextDueMileageKm))
-                    }
+                val alerts = statuses.filter { it.status != MaintenanceStatus.UNSCHEDULED }.map {
+                    VehicleAlert.MaintenanceAlert(it.record.serviceType, it.status, it.record.nextDueDate, it.record.nextDueMileageKm)
                 }.distinctBy { it.conditionKey }
                 DashboardState.Ready(
                     DashboardSummary(activeVehicle, connection, latest, analyzed, statuses, alerts)

@@ -3,6 +3,7 @@ package cl.cristian.bitacoraobd.data.local.dao
 import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.Query
+import androidx.room.Update
 import cl.cristian.bitacoraobd.data.local.entity.MaintenanceRecordEntity
 import kotlinx.coroutines.flow.Flow
 
@@ -19,4 +20,7 @@ interface MaintenanceDao {
 
     @Insert
     suspend fun insert(record: MaintenanceRecordEntity): Long
+
+    @Update
+    suspend fun update(record: MaintenanceRecordEntity): Int
 }

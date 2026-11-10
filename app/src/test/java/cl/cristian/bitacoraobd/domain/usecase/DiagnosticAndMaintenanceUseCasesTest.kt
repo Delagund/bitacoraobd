@@ -36,10 +36,11 @@ class DiagnosticAndMaintenanceUseCasesTest {
         }
         val result = ScanDiagnosticCodesUseCase(gateway, FakeVehicles(vehicle), fixedClock())(vehicle.id)
 
-        assertEquals(
-            DiagnosticScanResult.Success(vehicle.id, 1234L, 42_000, emptyList()),
-            result
-        )
+        assertEquals(vehicle.id, (result as DiagnosticScanResult.Success).vehicleId)
+        assertEquals(1234L, result.timestampMillis)
+        assertEquals(42_000, result.mileageAtScanKm)
+        assertEquals(emptyList<String>(), result.codes)
+        assertEquals(true, result.captureId.isNotBlank())
     }
 
     @Test

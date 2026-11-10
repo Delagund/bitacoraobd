@@ -10,6 +10,10 @@ import cl.cristian.bitacoraobd.data.local.entity.DiagnosticSessionEntity
 import cl.cristian.bitacoraobd.data.local.entity.MaintenanceRecordEntity
 import cl.cristian.bitacoraobd.data.local.entity.VehicleEntity
 import cl.cristian.bitacoraobd.domain.model.MaintenanceType
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import org.junit.After
@@ -60,7 +64,53 @@ class AppDatabaseTest {
         assertNull(database.vehicleDao().getById(vehicleId))
         assertEquals(emptyList<DiagnosticSessionEntity>(), database.diagnosticDao().sessions(vehicleId))
         assertNull(database.diagnosticDao().sessionById(sessionId))
+        database.openHelper.readableDatabase.query("SELECT COUNT(*) FROM diagnostic_codes WHERE sessionId = $sessionId").use { cursor ->
+            cursor.moveToFirst()
+            assertEquals(0, cursor.getInt(0))
+        }
         assertEquals(emptyList<MaintenanceRecordEntity>(), database.maintenanceDao().observeByVehicle(vehicleId).first())
+    }
+
+    @Test
+    fun editingMaintenanceKeepsIdAndRecomputesLatest() = runBlocking {
+        val vehicleId = database.vehicleDao().insert(vehicle().copy(year = 0))
+        val repository = cl.cristian.bitacoraobd.data.repository.RoomMaintenanceRepository(database)
+        val first = cl.cristian.bitacoraobd.domain.model.MaintenanceRecord(
+            vehicleId = vehicleId, serviceType = MaintenanceType.BRAKES,
+            performedDate = java.time.LocalDate.of(2025, 1, 1), mileageAtServiceKm = 10, notes = "original"
+        )
+        val firstId = repository.saveMaintenanceRecord(first)
+        val secondId = repository.saveMaintenanceRecord(first.copy(performedDate = java.time.LocalDate.of(2025, 2, 1)))
+        assertEquals(firstId, repository.saveMaintenanceRecord(first.copy(id = firstId, performedDate = java.time.LocalDate.of(2025, 3, 1), notes = "edited")))
+        assertEquals(2, repository.observeMaintenanceByVehicle(vehicleId).first().size)
+        assertEquals(firstId, repository.getLatestRecordsPerAlertableType(vehicleId).single().id)
+        assertEquals("edited", repository.getMaintenanceById(firstId)?.notes)
+        assertEquals(0, database.vehicleDao().getById(vehicleId)?.year)
+        assertEquals(true, runCatching { repository.saveMaintenanceRecord(first.copy(id = secondId + 100)) }.isFailure)
+    }
+
+    @Test
+    fun editingNotesDoesNotUndoManualOdometerCorrection() = runBlocking {
+        val vehicleId = database.vehicleDao().insert(vehicle().copy(currentMileageKm = 100))
+        val repository = cl.cristian.bitacoraobd.data.repository.RoomMaintenanceRepository(database)
+        val record = cl.cristian.bitacoraobd.domain.model.MaintenanceRecord(
+            vehicleId = vehicleId, serviceType = MaintenanceType.BRAKES,
+            performedDate = java.time.LocalDate.of(2025, 1, 1), mileageAtServiceKm = 100
+        )
+        val id = repository.saveMaintenanceRecord(record)
+        database.vehicleDao().update(vehicle().copy(id = vehicleId, currentMileageKm = 50))
+        repository.saveMaintenanceRecord(record.copy(id = id, notes = "corregido"))
+        assertEquals(50, database.vehicleDao().getById(vehicleId)?.currentMileageKm)
+        assertEquals("corregido", repository.getMaintenanceById(id)?.notes)
+    }
+
+    @Test
+    fun newMaintenanceTypesAreIndependentlyAlertable() = runBlocking {
+        val vehicleId = database.vehicleDao().insert(vehicle())
+        val types = listOf(MaintenanceType.BRAKES, MaintenanceType.TIRES, MaintenanceType.BATTERY, MaintenanceType.COOLANT)
+        types.forEach { database.maintenanceDao().insert(maintenance(vehicleId, it, 1L)) }
+        database.maintenanceDao().insert(maintenance(vehicleId, MaintenanceType.OTHER, 1L))
+        assertEquals(types.toSet(), database.maintenanceDao().latestAlertable(vehicleId).map { it.serviceType }.toSet())
     }
 
     @Test
@@ -258,7 +308,7 @@ class AppDatabaseTest {
             }.toSet()
         }
 
-        assertEquals(setOf(listOf("vehicleId")), indexColumns("diagnostic_sessions"))
+        assertEquals(setOf(listOf("vehicleId"), listOf("captureId")), indexColumns("diagnostic_sessions"))
         assertEquals(
             setOf(listOf("sessionId"), listOf("sessionId", "code")),
             indexColumns("diagnostic_codes")
@@ -270,6 +320,102 @@ class AppDatabaseTest {
             ),
             indexColumns("maintenance_records")
         )
+    }
+
+    @Test
+    fun diagnosticCaptureSaveIsIdempotentAndRejectsDifferentPayload() = runBlocking {
+        val vehicleId = database.vehicleDao().insert(vehicle())
+        val diagnostics = cl.cristian.bitacoraobd.data.repository.RoomDiagnosticRepository(database)
+        val capture = cl.cristian.bitacoraobd.domain.model.DiagnosticSession(
+            vehicleId = vehicleId,
+            timestampMillis = 10L,
+            mileageAtScanKm = 20,
+            codes = listOf("P0123"),
+            captureId = "capture-1"
+        )
+
+        val firstId = diagnostics.saveDiagnosticSessionAndAdvanceMileage(capture)
+        val retryId = diagnostics.saveDiagnosticSessionAndAdvanceMileage(capture)
+
+        assertEquals(firstId, retryId)
+        assertEquals(1, database.diagnosticDao().sessions(vehicleId).size)
+        assertEquals(listOf("P0123"), diagnostics.getSessionById(firstId)?.codes)
+        assertEquals(20, database.vehicleDao().getById(vehicleId)?.currentMileageKm)
+
+        val conflict = runCatching {
+            diagnostics.saveDiagnosticSessionAndAdvanceMileage(capture.copy(codes = listOf("P0456")))
+        }
+        assertEquals(true, conflict.isFailure)
+        assertEquals(listOf("P0123"), diagnostics.getSessionById(firstId)?.codes)
+        assertEquals(1, database.diagnosticDao().sessions(vehicleId).size)
+    }
+
+    @Test
+    fun concurrentSavesOfSameDiagnosticCaptureReturnOneSessionId() = runBlocking {
+        val vehicleId = database.vehicleDao().insert(vehicle())
+        val diagnostics = cl.cristian.bitacoraobd.data.repository.RoomDiagnosticRepository(database)
+        val capture = cl.cristian.bitacoraobd.domain.model.DiagnosticSession(
+            vehicleId = vehicleId,
+            timestampMillis = 10L,
+            mileageAtScanKm = 20,
+            codes = listOf("P0123", "P0123"),
+            captureId = "capture-concurrent"
+        )
+
+        val ids = coroutineScope {
+            (1..8).map {
+                async(Dispatchers.IO) {
+                    diagnostics.saveDiagnosticSessionAndAdvanceMileage(capture)
+                }
+            }.awaitAll()
+        }
+
+        assertEquals(1, ids.toSet().size)
+        assertEquals(1, database.diagnosticDao().sessions(vehicleId).size)
+        assertEquals(listOf("P0123"), diagnostics.getSessionById(ids.first())?.codes)
+    }
+
+    @Test
+    fun differentCaptureIdsWithIdenticalPayloadCreateDifferentSessions() = runBlocking {
+        val vehicleId = database.vehicleDao().insert(vehicle())
+        val diagnostics = cl.cristian.bitacoraobd.data.repository.RoomDiagnosticRepository(database)
+        val payload = cl.cristian.bitacoraobd.domain.model.DiagnosticSession(
+            vehicleId = vehicleId, timestampMillis = 12L, mileageAtScanKm = 10, codes = listOf("P0123")
+        )
+
+        val firstId = diagnostics.saveDiagnosticSessionAndAdvanceMileage(payload.copy(captureId = "capture-a"))
+        val secondId = diagnostics.saveDiagnosticSessionAndAdvanceMileage(payload.copy(captureId = "capture-b"))
+
+        assertEquals(false, firstId == secondId)
+        assertEquals(2, database.diagnosticDao().sessions(vehicleId).size)
+    }
+
+    @Test
+    fun diagnosticRollbackCanRetrySameCapture() = runBlocking {
+        val vehicleId = database.vehicleDao().insert(vehicle())
+        val diagnostics = cl.cristian.bitacoraobd.data.repository.RoomDiagnosticRepository(database)
+        val capture = cl.cristian.bitacoraobd.domain.model.DiagnosticSession(
+            vehicleId = vehicleId, timestampMillis = 15L, mileageAtScanKm = 20,
+            codes = listOf("P0123"), captureId = "capture-retry"
+        )
+        database.openHelper.writableDatabase.execSQL(
+            "CREATE TRIGGER fail_vehicle_mileage BEFORE UPDATE OF currentMileageKm ON vehicles " +
+                "BEGIN SELECT RAISE(ABORT, 'forced failure'); END"
+        )
+
+        assertEquals(true, runCatching {
+            diagnostics.saveDiagnosticSessionAndAdvanceMileage(capture)
+        }.isFailure)
+        assertEquals(emptyList<DiagnosticSessionEntity>(), database.diagnosticDao().sessions(vehicleId))
+        assertEquals(10, database.vehicleDao().getById(vehicleId)?.currentMileageKm)
+
+        database.openHelper.writableDatabase.execSQL("DROP TRIGGER fail_vehicle_mileage")
+        val id = diagnostics.saveDiagnosticSessionAndAdvanceMileage(capture)
+
+        assertEquals(id, diagnostics.saveDiagnosticSessionAndAdvanceMileage(capture))
+        assertEquals(1, database.diagnosticDao().sessions(vehicleId).size)
+        assertEquals(listOf("P0123"), diagnostics.getSessionById(id)?.codes)
+        assertEquals(20, database.vehicleDao().getById(vehicleId)?.currentMileageKm)
     }
 
     private fun maintenance(vehicleId: Long, type: MaintenanceType, day: Long) =

@@ -1,6 +1,7 @@
 package cl.cristian.bitacoraobd.domain.usecase
 
 import cl.cristian.bitacoraobd.domain.model.DashboardState
+import cl.cristian.bitacoraobd.domain.model.AppSettings
 import cl.cristian.bitacoraobd.domain.model.MaintenanceRecord
 import cl.cristian.bitacoraobd.domain.model.MaintenanceType
 import cl.cristian.bitacoraobd.domain.model.Vehicle
@@ -80,6 +81,39 @@ class MaintenanceDashboardDeleteUseCasesTest {
 
         assertEquals(SaveMaintenanceResult.Saved(1L), result)
         assertEquals(listOf(record), maintenance.savedRecords)
+    }
+
+    @Test
+    fun maintenanceRejectsInvalidDatesAndMileageWithoutWriting() = runBlocking {
+        val maintenance = TestMaintenance()
+        val clock = Clock.fixed(Instant.parse("2025-01-10T00:00:00Z"), ZoneOffset.UTC)
+        val useCase = SaveMaintenanceUseCase(TestVehicles(listOf(vehicle(1))), maintenance, clock)
+        val record = MaintenanceRecord(vehicleId = 1, serviceType = MaintenanceType.BRAKES,
+            performedDate = LocalDate.of(2025, 1, 10), mileageAtServiceKm = 40_000)
+        listOf(record.copy(performedDate = LocalDate.of(2025, 1, 11)),
+            record.copy(nextDueDate = LocalDate.of(2025, 1, 9)),
+            record.copy(nextDueMileageKm = 39_999)).forEach {
+            assertTrue(useCase(it) is SaveMaintenanceResult.Failed)
+        }
+        assertTrue(maintenance.savedRecords.isEmpty())
+        assertTrue(useCase(record.copy(nextDueDate = record.performedDate, nextDueMileageKm = 40_000)) is SaveMaintenanceResult.Saved)
+    }
+
+    @Test
+    fun deleteFailureAfterSelectionPreservesVehicleAndExposesFailure() = runBlocking {
+        val vehicles = TestVehicles(listOf(vehicle(1), vehicle(2))).apply { failDelete = true }
+        val preferences = TestPreferences(1L)
+        assertEquals(DeleteVehicleResult.Failed, DeleteVehicleUseCase(vehicles, preferences, TestGateway())(1L))
+        assertEquals(2L, preferences.activeVehicleId.first())
+        assertEquals(listOf(1L, 2L), vehicles.values.value.map { it.id })
+    }
+
+    @Test
+    fun deletePropagatesCancellation() = runBlocking {
+        val vehicles = TestVehicles(listOf(vehicle(1))).apply { cancelDelete = true }
+        val cancellation = runCatching { DeleteVehicleUseCase(vehicles, TestPreferences(1L), TestGateway())(1L) }.exceptionOrNull()
+        assertTrue(cancellation is kotlinx.coroutines.CancellationException)
+        assertEquals(listOf(1L), vehicles.values.value.map { it.id })
     }
 
     @Test
@@ -239,9 +273,9 @@ class MaintenanceDashboardDeleteUseCasesTest {
         val preferences = TestPreferences(vehicle.id).apply { failNextSelectionUpdate = true }
         val useCase = DeleteVehicleUseCase(vehicles, preferences, TestGateway())
 
-        val deletionResult = runCatching { useCase(vehicle.id) }
+        val deletionResult = useCase(vehicle.id)
 
-        assertTrue(deletionResult.isFailure)
+        assertEquals(DeleteVehicleResult.Failed, deletionResult)
         assertEquals(listOf(vehicle), vehicles.values.value)
         assertEquals(vehicle.id, preferences.activeVehicleId.first())
         val state = dashboard(
@@ -258,7 +292,7 @@ class MaintenanceDashboardDeleteUseCasesTest {
             sessions[1L] = MutableStateFlow(
                 listOf(cl.cristian.bitacoraobd.domain.model.DiagnosticSession(
                     id = 1, vehicleId = 1, timestampMillis = 1, mileageAtScanKm = 40_000,
-                    codes = listOf("P0123", "P0123")
+                    codes = listOf("P0123", "P0123", "P0456")
                 ))
             )
         }
@@ -280,9 +314,10 @@ class MaintenanceDashboardDeleteUseCasesTest {
         job.cancel()
 
         val summaries = emissions.map { (it as DashboardState.Ready).summary }
-        assertEquals(1, summaries.first().alerts.size)
-        assertTrue(summaries.first().alerts.single() is cl.cristian.bitacoraobd.domain.model.VehicleAlert.RecurrentDtcAlert)
-        assertTrue(summaries.last().alerts.isEmpty())
+        assertEquals(listOf("P0123", "P0456"), summaries.first().codesInLastSession.map { it.code })
+        assertEquals(listOf(true, false), summaries.first().codesInLastSession.map { it.isRecurrent })
+        assertTrue(summaries.first().alerts.isEmpty())
+        assertTrue(summaries.last().codesInLastSession.isEmpty())
     }
 }
 
@@ -305,6 +340,8 @@ private fun vehicle(id: Long, mileage: Int = 40_000) = Vehicle(
 
 private class TestVehicles(initial: List<Vehicle>) : VehicleRepository {
     val values = MutableStateFlow(initial)
+    var failDelete = false
+    var cancelDelete = false
     override fun observeVehicles(): Flow<List<Vehicle>> = values
     override fun observeVehicleById(vehicleId: Long): Flow<Vehicle?> = values.let { flow ->
         flowOf(flow.value.firstOrNull { it.id == vehicleId })
@@ -312,6 +349,8 @@ private class TestVehicles(initial: List<Vehicle>) : VehicleRepository {
     override suspend fun getVehicleById(vehicleId: Long) = values.value.firstOrNull { it.id == vehicleId }
     override suspend fun saveVehicle(vehicle: Vehicle): Long = vehicle.id
     override suspend fun deleteVehicle(vehicleId: Long) {
+        if (cancelDelete) throw kotlinx.coroutines.CancellationException("cancelled")
+        if (failDelete) error("Room delete failed")
         values.value = values.value.filterNot { it.id == vehicleId }
     }
 }
@@ -321,6 +360,7 @@ private class TestPreferences(activeId: Long?) : AppPreferencesRepository {
     var failNextSelectionUpdate = false
     override val activeVehicleId: MutableStateFlow<Long?> = activeIdFlow
     override val obdConnectionConfig = MutableStateFlow(ObdConnectionConfig())
+    override val settings = MutableStateFlow(AppSettings())
     override suspend fun setActiveVehicleId(vehicleId: Long?) {
         if (failNextSelectionUpdate) {
             failNextSelectionUpdate = false
@@ -329,6 +369,7 @@ private class TestPreferences(activeId: Long?) : AppPreferencesRepository {
         activeVehicleId.value = vehicleId
     }
     override suspend fun saveObdConnectionConfig(config: ObdConnectionConfig) { obdConnectionConfig.value = config }
+    override suspend fun saveSettings(settings: AppSettings) { this.settings.value = settings }
 }
 
 private class TestMaintenance : MaintenanceRepository {
