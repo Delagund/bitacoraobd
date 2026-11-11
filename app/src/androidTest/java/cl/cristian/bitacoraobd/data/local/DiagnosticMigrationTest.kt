@@ -2,11 +2,9 @@ package cl.cristian.bitacoraobd.data.local
 
 import android.content.Context
 import android.database.sqlite.SQLiteDatabase
-import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
-import cl.cristian.bitacoraobd.data.local.database.AppDatabase
-import cl.cristian.bitacoraobd.data.local.database.MIGRATION_1_2
+import cl.cristian.bitacoraobd.data.local.database.buildAppDatabase
 import java.io.File
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
@@ -26,9 +24,7 @@ class DiagnosticMigrationTest {
         file.parentFile?.mkdirs()
         createVersionOneDatabase(file)
 
-        val database = Room.databaseBuilder(context, AppDatabase::class.java, name)
-            .addMigrations(MIGRATION_1_2)
-            .build()
+        val database = buildAppDatabase(context, name)
 
         try {
             val vehicle = database.vehicleDao().getById(1L)

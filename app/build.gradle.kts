@@ -17,7 +17,7 @@ android {
         versionCode = 1
         versionName = "1.0"
 
-        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        testInstrumentationRunner = "cl.cristian.bitacoraobd.TestRunner"
     }
 
     buildTypes {
@@ -58,6 +58,7 @@ dependencies {
     implementation(libs.androidx.room.runtime)
     implementation(libs.androidx.room.ktx)
     implementation(libs.androidx.datastore.preferences)
+    implementation(libs.androidx.navigation.compose)
     implementation(libs.kotlinx.coroutines.core)
     ksp(libs.androidx.room.compiler)
     testImplementation(libs.junit)

@@ -1,0 +1,372 @@
+package cl.cristian.bitacoraobd.ui
+
+import cl.cristian.bitacoraobd.domain.model.DiagnosticScanResult
+import cl.cristian.bitacoraobd.domain.model.Vehicle
+import cl.cristian.bitacoraobd.domain.obd.ObdConnectionConfig
+import cl.cristian.bitacoraobd.domain.obd.ObdConnectionState
+import cl.cristian.bitacoraobd.domain.obd.ObdGateway
+import cl.cristian.bitacoraobd.domain.obd.ObdLiveMetrics
+import cl.cristian.bitacoraobd.domain.obd.ObdResult
+import cl.cristian.bitacoraobd.domain.repository.AppPreferencesRepository
+import cl.cristian.bitacoraobd.domain.repository.VehicleRepository
+import cl.cristian.bitacoraobd.domain.usecase.DeleteVehicleResult
+import cl.cristian.bitacoraobd.domain.usecase.DeleteVehicleUseCase
+import cl.cristian.bitacoraobd.domain.usecase.SaveDiagnosticSessionUseCase
+import cl.cristian.bitacoraobd.domain.usecase.ScanDiagnosticCodesUseCase
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+
+sealed interface PendingChoice {
+    data object Save : PendingChoice
+    data object Discard : PendingChoice
+    data object Stay : PendingChoice
+}
+
+sealed interface ExitAction {
+    data object Back : ExitAction
+    data class ToRoute(val route: String) : ExitAction
+}
+
+data class AuthorizedExit(val id: Long, val action: ExitAction)
+
+data class PendingDecision(val id: Long, val action: ExitAction?)
+
+data class AppSessionState(
+    val vehicles: List<Vehicle> = emptyList(),
+    val activeVehicleId: Long? = null,
+    val pendingDiagnostic: DiagnosticScanResult.Success? = null,
+    val savedDiagnosticId: Long? = null,
+    val metrics: Pair<Long, ObdLiveMetrics>? = null,
+    val operation: String? = null,
+    val error: String? = null,
+    val pendingDecision: PendingDecision? = null,
+    val authorizedExit: AuthorizedExit? = null
+)
+
+class AppSession(
+    private val vehicles: VehicleRepository,
+    private val preferences: AppPreferencesRepository,
+    private val gateway: ObdGateway,
+    private val scanDiagnostic: ScanDiagnosticCodesUseCase,
+    private val saveDiagnostic: SaveDiagnosticSessionUseCase,
+    private val deleteVehicleUseCase: DeleteVehicleUseCase,
+    private val scope: CoroutineScope
+) {
+    private val mutex = Mutex()
+    private val mutableState = MutableStateFlow(AppSessionState())
+    val state: StateFlow<AppSessionState> = mutableState.asStateFlow()
+    val connectionState get() = gateway.connectionState
+
+    private var connectJob: Job? = null
+    private var closeJob: Job? = null
+    private var saveJob: Job? = null
+    private var readJob: Job? = null
+    private var decision: CompletableDeferred<PendingChoice>? = null
+    private var pendingExit: ExitAction? = null
+    private var sensitiveOperationRunning = false
+    private var exitId = 0L
+    private var contextRefreshFailed = false
+
+    init { refreshVehicleContext() }
+
+    fun refreshVehicleContext() {
+        scope.launch {
+            try {
+                mutex.withLock { refreshVehicleContextLocked() }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: Exception) {
+                contextRefreshFailed = true
+                mutableState.value = mutableState.value.copy(error = error.message ?: "Could not load vehicles")
+            }
+        }
+    }
+
+    private suspend fun refreshVehicleContextLocked(clearError: Boolean = true) {
+        val all = vehicles.observeVehicles().first()
+        val stored = preferences.activeVehicleId.first()
+        val active = all.firstOrNull { it.id == stored } ?: all.firstOrNull()
+        if (stored != active?.id) preferences.setActiveVehicleId(active?.id)
+        contextRefreshFailed = false
+        mutableState.value = mutableState.value.copy(
+            vehicles = all,
+            activeVehicleId = active?.id,
+            error = if (clearError) null else mutableState.value.error
+        )
+    }
+
+    fun connect(config: ObdConnectionConfig, localNetworkAllowed: Boolean) {
+        if (!localNetworkAllowed || connectJob?.isActive == true || closeJob?.isActive == true) return
+        val job = scope.launch(start = CoroutineStart.LAZY) {
+            try {
+                if (gateway.connectionState.value is ObdConnectionState.Error) gateway.disconnect()
+                mutex.withLock {
+                    if (contextRefreshFailed) return@withLock
+                    refreshVehicleContextLocked()
+                    val activeId = preferences.activeVehicleId.first()
+                    if (activeId == null || vehicles.getVehicleById(activeId) == null ||
+                        sensitiveOperationRunning || pendingExit != null || mutableState.value.pendingDiagnostic != null ||
+                        gateway.connectionState.value !is ObdConnectionState.Disconnected
+                    ) return@withLock
+                    mutableState.value = mutableState.value.copy(operation = "connect", error = null)
+                    try {
+                        when (val result = gateway.connect(config)) {
+                            is ObdResult.Success -> Unit
+                            is ObdResult.Failure -> mutableState.value = mutableState.value.copy(error = result.message)
+                        }
+                    } finally {
+                        mutableState.value = mutableState.value.copy(operation = null)
+                    }
+                }
+            } finally {
+                if (connectJob === currentCoroutineContext()[Job]) connectJob = null
+            }
+        }
+        connectJob = job
+        job.start()
+    }
+
+    fun cancelConnection() {
+        scope.launch { cancelConnectingAndAwait() }
+    }
+
+    fun selectVehicle(vehicleId: Long) {
+        runSensitive(null) {
+            cancelConnectingAndAwait()
+            mutex.withLock {
+                if (contextRefreshFailed || gateway.connectionState.value !is ObdConnectionState.Disconnected) return@withLock
+                if (vehicles.getVehicleById(vehicleId) == null) return@withLock
+                try {
+                    preferences.setActiveVehicleId(vehicleId)
+                    refreshVehicleContextLocked()
+                } catch (cancelled: CancellationException) {
+                    contextRefreshFailed = true
+                    throw cancelled
+                } catch (error: Exception) {
+                    contextRefreshFailed = true
+                    mutableState.value = mutableState.value.copy(error = error.message ?: "Could not select vehicle")
+                }
+            }
+        }
+    }
+
+    fun deleteVehicle(vehicleId: Long) {
+        runSensitive(null) {
+            cancelConnectingAndAwait()
+            mutex.withLock {
+                if (contextRefreshFailed || gateway.connectionState.value !is ObdConnectionState.Disconnected) return@withLock
+                mutableState.value = mutableState.value.copy(operation = "delete", error = null)
+                var refreshRequired = false
+                try {
+                    when (deleteVehicleUseCase(vehicleId)) {
+                        DeleteVehicleResult.Deleted -> Unit
+                        DeleteVehicleResult.Connected -> mutableState.value = mutableState.value.copy(error = "Disconnect before changing vehicles")
+                        DeleteVehicleResult.NotFound -> mutableState.value = mutableState.value.copy(error = "Vehicle no longer exists")
+                        DeleteVehicleResult.Failed -> {
+                            refreshRequired = true
+                            mutableState.value = mutableState.value.copy(error = "Could not delete vehicle")
+                        }
+                    }
+                } catch (cancelled: CancellationException) {
+                    refreshRequired = true
+                    throw cancelled
+                } finally {
+                    mutableState.value = mutableState.value.copy(operation = null)
+                    if (refreshRequired) runCatching { refreshVehicleContextLocked(clearError = false) }
+                        .onFailure { contextRefreshFailed = true }
+                }
+                if (!refreshRequired) refreshVehicleContextLocked()
+            }
+        }
+    }
+
+    fun scanDiagnostic() {
+        if (sensitiveOperationRunning || pendingExit != null || mutableState.value.pendingDiagnostic != null || mutableState.value.operation != null) return
+        val job = scope.launch(start = CoroutineStart.LAZY) {
+            mutex.withLock {
+                if (sensitiveOperationRunning || pendingExit != null || mutableState.value.pendingDiagnostic != null || mutableState.value.operation != null ||
+                    gateway.connectionState.value !is ObdConnectionState.Connected
+                ) return@withLock
+                val active = preferences.activeVehicleId.first() ?: return@withLock
+                mutableState.value = mutableState.value.copy(operation = "scan", error = null)
+                try {
+                    when (val result = scanDiagnostic(active)) {
+                        is DiagnosticScanResult.Success -> mutableState.value =
+                            mutableState.value.copy(pendingDiagnostic = result)
+                        is DiagnosticScanResult.Failure -> mutableState.value =
+                            mutableState.value.copy(error = result.message)
+                    }
+                } finally {
+                    mutableState.value = mutableState.value.copy(operation = null)
+                }
+            }
+        }
+        readJob = job
+        job.start()
+    }
+
+    fun readMetrics() {
+        if (sensitiveOperationRunning || pendingExit != null || mutableState.value.operation != null) return
+        val job = scope.launch(start = CoroutineStart.LAZY) {
+            mutex.withLock {
+                if (sensitiveOperationRunning || pendingExit != null || mutableState.value.operation != null ||
+                    gateway.connectionState.value !is ObdConnectionState.Connected
+                ) return@withLock
+                val active = preferences.activeVehicleId.first() ?: return@withLock
+                mutableState.value = mutableState.value.copy(operation = "metrics", error = null)
+                try {
+                    when (val result = gateway.readLiveMetrics()) {
+                        is ObdResult.Success -> mutableState.value = mutableState.value.copy(metrics = active to result.value)
+                        is ObdResult.Failure -> mutableState.value = mutableState.value.copy(error = result.message)
+                    }
+                } finally {
+                    mutableState.value = mutableState.value.copy(operation = null)
+                }
+            }
+        }
+        readJob = job
+        job.start()
+    }
+
+    fun savePendingDiagnostic() {
+        if (saveJob?.isActive == true) return
+        val pending = mutableState.value.pendingDiagnostic ?: return
+        val job = scope.launch(start = CoroutineStart.LAZY) {
+            mutableState.value = mutableState.value.copy(operation = "save", error = null)
+            try {
+                val id = saveDiagnostic(pending) ?: error("Diagnostic capture was not saved")
+                if (mutableState.value.pendingDiagnostic?.captureId == pending.captureId) {
+                    mutableState.value = mutableState.value.copy(pendingDiagnostic = null, savedDiagnosticId = id, error = null)
+                }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: Exception) {
+                mutableState.value = mutableState.value.copy(error = error.message ?: "Could not save diagnostic")
+            } finally {
+                mutableState.value = mutableState.value.copy(operation = null)
+                saveJob = null
+            }
+        }
+        saveJob = job
+        job.start()
+    }
+
+    fun resolvePending(choice: PendingChoice) {
+        decision?.complete(choice)
+    }
+
+    fun disconnect() {
+        runSensitive(null) { cancelConnectingAndAwait(); gateway.disconnect() }
+    }
+
+    fun requestExit(action: ExitAction) {
+        if (action is ExitAction.ToRoute && !cl.cristian.bitacoraobd.ui.navigation.AppRoute.isAllowedTarget(action.route)) {
+            mutableState.value = mutableState.value.copy(error = "Destino de navegación no válido")
+            return
+        }
+        runSensitive(action) {
+        if (gateway.connectionState.value is ObdConnectionState.Connecting) cancelConnectingAndAwait()
+        val reading = readJob
+        if (reading?.isActive == true) {
+            reading.cancel()
+            if (mutableState.value.operation == "scan") runCatching { gateway.disconnect() }
+            reading.join()
+            readJob = null
+        }
+        authorizeExit(action)
+        }
+    }
+
+    fun completeExit(authorizationId: Long) {
+        if (mutableState.value.authorizedExit?.id == authorizationId) {
+            mutableState.value = mutableState.value.copy(authorizedExit = null, error = null)
+            pendingExit = null
+        }
+    }
+
+    fun failExit(authorizationId: Long, message: String) {
+        if (mutableState.value.authorizedExit?.id == authorizationId) {
+            mutableState.value = mutableState.value.copy(authorizedExit = null, error = message)
+            pendingExit = null
+        }
+    }
+
+    private fun runSensitive(action: ExitAction?, operation: suspend () -> Unit) {
+        if (decision?.isActive == true || sensitiveOperationRunning || pendingExit != null) return
+        sensitiveOperationRunning = true
+        pendingExit = action
+        scope.launch {
+            try {
+                while (true) {
+                    val capture = mutableState.value.pendingDiagnostic ?: break
+                    val deferred = CompletableDeferred<PendingChoice>()
+                    decision = deferred
+                    mutableState.value = mutableState.value.copy(pendingDecision = PendingDecision(++exitId, action))
+                    val choice = deferred.await()
+                    mutableState.value = mutableState.value.copy(pendingDecision = null)
+                    decision = null
+                    when (choice) {
+                        PendingChoice.Stay -> return@launch
+                        PendingChoice.Discard -> {
+                            if (mutableState.value.pendingDiagnostic?.captureId == capture.captureId) {
+                                mutableState.value = mutableState.value.copy(pendingDiagnostic = null)
+                            }
+                        }
+                        PendingChoice.Save -> {
+                            savePendingDiagnostic()
+                            saveJob?.join()
+                            if (mutableState.value.error != null) return@launch
+                        }
+                    }
+                    if (mutableState.value.pendingDiagnostic != null) continue
+                }
+                if (saveJob?.isActive == true) {
+                    saveJob?.join()
+                    if (mutableState.value.error != null) return@launch
+                }
+                operation()
+            } finally {
+                if (decision?.isActive == true) decision?.cancel()
+                decision = null
+                mutableState.value = mutableState.value.copy(pendingDecision = null)
+                sensitiveOperationRunning = false
+                if (mutableState.value.authorizedExit == null) pendingExit = null
+            }
+        }
+    }
+
+    private fun authorizeExit(action: ExitAction) {
+        if (mutableState.value.pendingDiagnostic != null || saveJob?.isActive == true) return
+        mutableState.value = mutableState.value.copy(authorizedExit = AuthorizedExit(++exitId, action))
+    }
+
+    private suspend fun cancelConnectingAndAwait() {
+        if (gateway.connectionState.value is ObdConnectionState.Connected) return
+        val attempt = connectJob
+        if (attempt?.isActive != true &&
+            gateway.connectionState.value !is ObdConnectionState.Connecting &&
+            gateway.connectionState.value !is ObdConnectionState.Disconnecting &&
+            gateway.connectionState.value !is ObdConnectionState.Error
+        ) return
+
+        val close = closeJob ?: scope.launch(start = CoroutineStart.LAZY) {
+            attempt?.cancel()
+            runCatching { gateway.disconnect() }
+            attempt?.join()
+            gateway.disconnect()
+        }.also { closeJob = it; it.start() }
+        close.join()
+        closeJob = null
+    }
+}
