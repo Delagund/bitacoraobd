@@ -1,5 +1,6 @@
 package cl.cristian.bitacoraobd.ui.navigation
 
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.NavigationBar
@@ -45,6 +46,7 @@ import cl.cristian.bitacoraobd.ui.HomeViewModel
 import cl.cristian.bitacoraobd.ui.settings.SettingsViewModel
 import cl.cristian.bitacoraobd.ui.home.HomeScreen
 import cl.cristian.bitacoraobd.ui.settings.SettingsScreen
+import cl.cristian.bitacoraobd.ui.theme.PrototypeOutline
 import cl.cristian.bitacoraobd.domain.repository.DiagnosticRepository
 import cl.cristian.bitacoraobd.domain.repository.AppPreferencesRepository
 import kotlinx.coroutines.CancellationException
@@ -241,7 +243,7 @@ fun AppNavigation(navController: NavHostController, session: AppSession, vehicle
     }
     Scaffold(
         bottomBar = {
-            NavigationBar {
+            NavigationBar(modifier = Modifier.border(1.dp, PrototypeOutline)) {
                 listOf(
                     AppRoute.HOME to "Inicio",
                     AppRoute.VEHICLES to "Vehículos",

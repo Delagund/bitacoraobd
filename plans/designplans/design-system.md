@@ -1,4 +1,16 @@
-# Sistema visual existente
+# Sistema visual vigente
+
+## Dirección visual aprobada — 2026-11-11
+
+El prototipo navegable sigue siendo la referencia de estructura, jerarquía y flujos. Como ajuste posterior aprobado, las superficies de producto usan fondo claro blanco #FFFFFF, fondo oscuro azul profundo #0C1420 y tarjetas grafito #2B2E33 en ambos temas, con contenido #F4F5F7 y contorno #87919B de 1 dp. Esta decisión reemplaza los valores originales del prototipo solo para superficies y estilos de acción.
+
+- Tarjetas de todas las rutas: relleno grafito constante y texto/iconos de contenido #F4F5F7; mensajes/estados mantienen texto y etiquetas semánticas.
+- Títulos de pantalla/headline Bold y sección/title SemiBold; texto de cuerpo conserva peso normal.
+- Acciones operativas: verde #275D46 y texto blanco en botones Filled. Outlined sobre superficies generales usa `secondary` adaptable al tema; sobre tarjetas usa texto #F4F5F7 y borde #87919B. Cancelar: rojo `error` en superficies generales y #F6DFDD sobre grafito. Descartar/eliminar con pérdida: Filled #8A2F2C con texto blanco. Volver/navegar sin cancelar: neutral.
+- Barra inferior mantiene colores e indicador Material 3 y recibe contorno perimetral fino.
+- Sin colores dinámicos, Material Symbols, biblioteca de iconos ni cambio funcional. La paleta original CSS queda como antecedente, no como paleta vigente de superficies.
+- Ratios sRGB preliminares de pares opacos: contenido/grafito 12,49:1; contorno/grafito 4,25:1; contorno/blanco 3,27:1; contorno/azul profundo 5,77:1. La inspección renderizada de ambos temas, foco, texto ampliado y TalkBack sigue pendiente de QA.
+
 
 ## Referencia vigente para implementación desde 4.5
 
@@ -8,7 +20,7 @@ Usar verde para acciones y estados favorables, ámbar para atención y rojo para
 
 **Estado de 4.5:** esquema fijo claro/oscuro implementado en `ui/theme/Color.kt` y `Theme.kt`; no usa color dinámico. Pares de texto/superficie y botón/fondo calculados abajo corresponden a los hex instalados. Muestras renderizadas, alpha/estados de controles, TalkBack y escala de texto requieren comprobación visual durante QA; los ratios no acreditan por sí solos accesibilidad completa. La imagen de referencia sigue sin vínculo permanente. Esquemas y roles adicionales Material3 fijados en `ui/theme/Theme.kt`: containers, surfaceVariant, outline, inverse, surfaceContainer y errorContainer. La lista anterior de tokens de plantilla puede ser histórica.
 
-### Contraste calculado de la paleta implementada
+### Contraste calculado de la paleta anterior a la dirección visual de 2026-11-11 (histórico)
 
 Contraste relativo WCAG para valores sRGB opacos actualmente asignados. Los ratios cubren texto y fondo; no miden alpha, bordes, foco, error, estados deshabilitados ni componentes renderizados.
 
@@ -31,7 +43,7 @@ Contraste relativo WCAG para valores sRGB opacos actualmente asignados. Los rati
 
 Las razones confirman los pares opacos de texto/superficie y botones de la paleta implementada. QA aún debe inspeccionar controles, alpha, foco/error/deshabilitado, TalkBack, fuente ampliada, IME y barras del sistema en dispositivo; esta tabla no afirma que esas verificaciones se hayan hecho.
 
-Revisión documental: 2026-11-07. Línea base técnica, no diseño de producto aprobado. Fuentes bajo `app/src/main/`: `java/cl/cristian/bitacoraobd/ui/theme/{Color,Theme,Type}.kt`, `MainActivity.kt`, `res/values/{colors,strings,themes}.xml` y AndroidManifest.xml; dependencias en app/build.gradle.kts y gradle/libs.versions.toml.
+Revisión documental original: 2026-11-07. Los valores anteriores son una línea base histórica, superada para superficies y acciones por la decisión aprobada del 2026-11-11. Fuentes bajo `app/src/main/`: `java/cl/cristian/bitacoraobd/ui/theme/{Color,Theme,Type}.kt`, `MainActivity.kt`, `res/values/{colors,strings,themes}.xml` y AndroidManifest.xml; dependencias en app/build.gradle.kts y gradle/libs.versions.toml.
 
 ## Compose y Material
 
@@ -39,7 +51,7 @@ Compose habilitado; Material 3 declarado con BOM 2026.02.01. BitacoraOBDTheme ap
 
 Tema oscuro según isSystemInDarkTheme. dynamicColor=true por defecto: Android 12+ elige dynamicDarkColorScheme/dynamicLightColorScheme; en otro caso usa esquemas locales. Por ello los colores estáticos siguientes no garantizan el resultado visual en todos los dispositivos.
 
-## Paleta Compose explícita
+## Paleta Compose explícita anterior a la fidelidad del prototipo (histórico)
 
 | Token | ARGB | Rol |
 |---|---|---|
@@ -74,6 +86,6 @@ Theme.BitacoraOBD XML hereda android:Theme.Material.Light.NoActionBar; es envolt
 
 Accesibilidad y diferentes tamaños son requisitos de AGENTS.md. Contraste, TalkBack, escalado de fuente, objetivos táctiles, teclado, tamaño de ventana y legibilidad de barras: NO VERIFICADO, sin ejecución visual. No atribuir accesibilidad validada al solo uso de Material 3.
 
-## Referencia visual pendiente
+## Estado de la referencia visual anterior (histórico)
 
-No existe evidencia de paleta, tipografía, componentes, variables o variantes aprobadas en Figma. [figma-references](figma-references.md) registra el límite. El tema actual se documenta como código de plantilla existente, no como decisión visual aprobada. Definir tokens y estados de producto requiere diseño y aprobación posterior.
+Este párrafo registra el estado anterior a la aprobación del prototipo navegable y de la actualización visual del 2026-11-11. La dirección vigente está al inicio de este documento; los detalles históricos no prevalecen sobre ella.

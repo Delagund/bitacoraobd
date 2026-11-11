@@ -6,6 +6,7 @@ import android.os.Build
 import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -15,11 +16,11 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -32,12 +33,18 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import cl.cristian.bitacoraobd.domain.obd.ObdConnectionState
 import cl.cristian.bitacoraobd.domain.model.AppSettings
 import cl.cristian.bitacoraobd.domain.model.DistanceUnit
 import cl.cristian.bitacoraobd.domain.model.TemperatureUnit
+import cl.cristian.bitacoraobd.domain.obd.ObdConnectionState
 import cl.cristian.bitacoraobd.domain.repository.AppPreferencesRepository
 import cl.cristian.bitacoraobd.ui.AppSession
+import cl.cristian.bitacoraobd.ui.components.GraphiteCard
+import cl.cristian.bitacoraobd.ui.theme.PrototypeBadSoft
+import cl.cristian.bitacoraobd.ui.theme.PrototypeCardContent
+import cl.cristian.bitacoraobd.ui.theme.PrototypeGood
+import cl.cristian.bitacoraobd.ui.theme.PrototypeOutline
+import cl.cristian.bitacoraobd.ui.theme.PrototypeSurface
 
 @Composable
 fun ConnectionScreen(
@@ -72,7 +79,7 @@ fun ConnectionScreen(
             title = { Text("Conecta el teléfono al Wi-Fi del adaptador") },
             text = { Text("La conexión con el vehículo se inicia cuando pulses Conectar.") },
             confirmButton = { TextButton(onClick = { showWifiNotice = false }) { Text("Siguiente") } },
-            dismissButton = { TextButton(onClick = requestExit) { Text("Cancelar") } }
+            dismissButton = { TextButton(onClick = requestExit, colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)) { Text("Cancelar") } }
         )
     }
 
@@ -93,17 +100,14 @@ fun ConnectionScreen(
         }
 
         if (!model.loaded) {
-            Card(Modifier.fillMaxWidth()) {
+            GraphiteCard(Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     Text(model.error ?: "Cargando configuración…", style = MaterialTheme.typography.bodyLarge)
-                    if (model.error != null) Button(onClick = model::reload) { Text("Reintentar") }
+                    if (model.error != null) Button(onClick = model::reload, colors = ButtonDefaults.buttonColors(containerColor = PrototypeGood, contentColor = PrototypeSurface)) { Text("Reintentar") }
                 }
             }
         } else {
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
-            ) {
+            GraphiteCard(modifier = Modifier.fillMaxWidth()) {
                 Column(
                     Modifier.padding(20.dp),
                     verticalArrangement = Arrangement.spacedBy(16.dp)
@@ -113,6 +117,18 @@ fun ConnectionScreen(
                         value = model.ip,
                         onValueChange = model::editIp,
                         label = { Text("Dirección IP") },
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedTextColor = PrototypeCardContent,
+                            unfocusedTextColor = PrototypeCardContent,
+                            disabledTextColor = PrototypeCardContent,
+                            focusedLabelColor = PrototypeCardContent,
+                            unfocusedLabelColor = PrototypeCardContent,
+                            disabledLabelColor = PrototypeCardContent,
+                            focusedBorderColor = PrototypeOutline,
+                            unfocusedBorderColor = PrototypeOutline,
+                            disabledBorderColor = PrototypeOutline,
+                            cursorColor = PrototypeCardContent
+                        ),
                         enabled = connection !is ObdConnectionState.Connected && connection !is ObdConnectionState.Connecting,
                         modifier = Modifier.fillMaxWidth()
                     )
@@ -120,37 +136,52 @@ fun ConnectionScreen(
                         value = model.port,
                         onValueChange = model::editPort,
                         label = { Text("Puerto") },
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedTextColor = PrototypeCardContent,
+                            unfocusedTextColor = PrototypeCardContent,
+                            disabledTextColor = PrototypeCardContent,
+                            focusedLabelColor = PrototypeCardContent,
+                            unfocusedLabelColor = PrototypeCardContent,
+                            disabledLabelColor = PrototypeCardContent,
+                            focusedBorderColor = PrototypeOutline,
+                            unfocusedBorderColor = PrototypeOutline,
+                            disabledBorderColor = PrototypeOutline,
+                            cursorColor = PrototypeCardContent
+                        ),
                         enabled = connection !is ObdConnectionState.Connected && connection !is ObdConnectionState.Connecting,
                         modifier = Modifier.fillMaxWidth()
                     )
                     model.error?.let { message ->
-                        Text(message, color = MaterialTheme.colorScheme.error)
+                        Text(message)
                     }
                     state.error?.let { message ->
-                        Text(message, color = MaterialTheme.colorScheme.error)
+                        Text(message)
                     }
                     when (connection) {
-                        is ObdConnectionState.Connected -> ConnectionStatusCard("Conectado", connected = true)
+                        is ObdConnectionState.Connected -> ConnectionStatusCard("Conectado")
                         is ObdConnectionState.Connecting -> ConnectionStatusCard("Conectando…")
                         is ObdConnectionState.Disconnecting -> ConnectionStatusCard("Desconectando…")
-                        is ObdConnectionState.Error -> ConnectionStatusCard("Error de conexión", error = true)
+                        is ObdConnectionState.Error -> ConnectionStatusCard("Error de conexión")
                         else -> ConnectionStatusCard("Desconectado")
                     }
 
                     if (connection is ObdConnectionState.Connecting) {
                         OutlinedButton(
                             onClick = session::cancelConnection,
-                            modifier = Modifier.fillMaxWidth()
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = ButtonDefaults.outlinedButtonColors(contentColor = PrototypeBadSoft),
+                            border = BorderStroke(1.dp, PrototypeBadSoft)
                         ) { Text("Cancelar conexión") }
                     } else if (connection is ObdConnectionState.Connected) {
                         Button(
                             onClick = session::readMetrics,
                             enabled = state.operation == null,
-                            modifier = Modifier.fillMaxWidth()
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = ButtonDefaults.buttonColors(containerColor = PrototypeGood, contentColor = PrototypeSurface)
                         ) { Text("Actualizar lectura") }
                         state.metrics?.takeIf { it.first == state.activeVehicleId }?.second?.let { metrics ->
                             val vehicle = state.vehicles.firstOrNull { it.id == state.activeVehicleId }
-                            Card {
+                            GraphiteCard {
                                 Column(
                                     Modifier.padding(16.dp),
                                     verticalArrangement = Arrangement.spacedBy(12.dp)
@@ -162,7 +193,7 @@ fun ConnectionScreen(
                                     Text(
                                         java.text.DateFormat.getDateTimeInstance().format(metrics.timestampMillis),
                                         style = MaterialTheme.typography.bodyMedium,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        color = PrototypeCardContent
                                     )
                                     Text("RPM: ${metrics.rpm?.toString() ?: "No disponible"}", style = MaterialTheme.typography.bodyLarge)
                                     val temperature = metrics.coolantTempCelsius?.let {
@@ -184,7 +215,9 @@ fun ConnectionScreen(
                         }
                         OutlinedButton(
                             onClick = session::disconnect,
-                            modifier = Modifier.fillMaxWidth()
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = ButtonDefaults.outlinedButtonColors(contentColor = PrototypeCardContent),
+                            border = BorderStroke(1.dp, PrototypeCardContent)
                         ) { Text("Desconectar") }
                     } else if (connection !is ObdConnectionState.Disconnecting) {
                         Button(
@@ -197,30 +230,29 @@ fun ConnectionScreen(
                                     model.connect()
                                 } else launcher.launch(permission)
                             },
-                            modifier = Modifier.fillMaxWidth()
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = ButtonDefaults.buttonColors(containerColor = PrototypeGood, contentColor = PrototypeSurface)
                         ) { Text("Conectar") }
                     }
 
                     state.connectedConfigSavePending?.let {
                         Button(
                             onClick = session::retryConnectedConfigSave,
-                            modifier = Modifier.fillMaxWidth()
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = ButtonDefaults.buttonColors(containerColor = PrototypeGood, contentColor = PrototypeSurface)
                         ) { Text("Reintentar guardado de configuración") }
                     }
                 }
             }
 
             if (permissionDenied) {
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer)
-                ) {
+                GraphiteCard(Modifier.fillMaxWidth()) {
                     Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         Text(
                             "Permite el acceso a la red local para conectar con el adaptador.",
-                            color = MaterialTheme.colorScheme.onErrorContainer
+                            color = PrototypeCardContent
                         )
-                        TextButton(onClick = { launcher.launch(permission) }) { Text("Reintentar permiso") }
+                        Button(onClick = { launcher.launch(permission) }, colors = ButtonDefaults.buttonColors(containerColor = PrototypeGood, contentColor = PrototypeSurface)) { Text("Reintentar permiso") }
                         TextButton(onClick = {
                             context.startActivity(
                                 Intent(
@@ -241,26 +273,12 @@ fun ConnectionScreen(
 }
 
 @Composable
-private fun ConnectionStatusCard(label: String, connected: Boolean = false, error: Boolean = false) {
-    val background = when {
-        error -> MaterialTheme.colorScheme.errorContainer
-        connected -> MaterialTheme.colorScheme.secondaryContainer
-        else -> MaterialTheme.colorScheme.surfaceContainerHigh
-    }
-    val foreground = when {
-        error -> MaterialTheme.colorScheme.onErrorContainer
-        connected -> MaterialTheme.colorScheme.onSecondaryContainer
-        else -> MaterialTheme.colorScheme.onSurface
-    }
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = background)
-    ) {
+private fun ConnectionStatusCard(label: String) {
+    GraphiteCard(modifier = Modifier.fillMaxWidth()) {
         Text(
             label,
             Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
             style = MaterialTheme.typography.titleMedium,
-            color = foreground
         )
     }
 }

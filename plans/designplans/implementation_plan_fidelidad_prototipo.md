@@ -1,6 +1,6 @@
 # Plan de implementación — Fidelidad visual del prototipo Bitácora OBD
 
-**Estado: implementación visual previa cerrada; corrección de Ajustes y contraste planificada, pendiente de aprobación explícita.**
+**Estado: implementación visual del prototipo cerrada; seguimiento de estilo Material 3 aprobado por el usuario y en implementación (Proceed, 2026-11-11).**
 
 **Objetivo:** trasladar a Compose la apariencia visible del prototipo Figma Make aprobado, en UI-01–07 y los destinos secundarios presentes en el prototipo, conservando el comportamiento y los datos reales.
 
@@ -8,7 +8,7 @@
 
 ## 1. Fuentes y auditoría
 
-El archivo `/Users/cristian/Downloads/Prototipo BitacoraOBD navegable.zip` contiene React/Vite, no Compose. `src/App.tsx` define estructura, pantallas, navegación simulada, componentes e iconos SVG; `src/index.css` define variables, color, tipografía, tamaños y layouts. El usuario confirmó que el prototipo completo es aprobado; por eso la referencia visual de esta implementación es el ZIP, incluyendo su paleta y estilo.
+El archivo `/Users/cristian/Downloads/Prototipo BitacoraOBD navegable.zip` contiene React/Vite, no Compose. `src/App.tsx` define estructura, pantallas, navegación simulada, componentes e iconos SVG; `src/index.css` define variables, color, tipografía, tamaños y layouts. El usuario confirmó el prototipo como referencia aprobada de pantallas, jerarquía, flujos y estilo; la paleta grafito de §11 se aprobó después con Proceed (2026-11-11) y sustituye únicamente los tokens de superficie del prototipo.
 
 4.4 cerró revisión documental y R03, y transfirió la UI por etapas; no demuestra comparación visual del prototipo. 4.5 cerró UI-02 funcional y un tema fijo, con límites visuales/manuales expresos. La causa verificable de la brecha es que se validaron contratos y funcionalidad por paquete sin una comparación de fidelidad contra este prototipo. No hay evidencia suficiente para determinar si el ZIP exacto estaba disponible entonces.
 
@@ -16,8 +16,8 @@ En el código actual, `ui/navigation/AppNavigation.kt` usa `NavigationBarItem(ic
 
 ## 2. Decisiones visuales y funcionales
 
-- **Referencia visual aprobada más reciente:** el ZIP aportado. Su paleta CSS declara tinta `#202124`, muted `#60646c`, líneas `#c9cbd0`, superficies `#fff/#f4f5f7/#e8ebef`, primary `#344b5f`, primary soft `#dce6ee`, semantic good/warn/bad `#275d46/#735315/#8a2f2c` y fondos suaves correspondientes. Trasladar roles equivalentes a Material 3 y comprobar contraste; no reproducir la aplicación web píxel a píxel.
-- Esta aprobación visual explícita reemplaza para este alcance la paleta D4 verde/grafito previamente documentada. Actualizar DD, design-system y handoff para registrar el cambio y su fecha; no mantener dos fuentes visuales contradictorias. Mantener tema claro/oscuro solo donde el prototipo aprobado y la decisión funcional lo permiten; aclarar la variante oscura del prototipo desde sus reglas CSS antes de implementarla.
+- **Referencia estructural y de interacción aprobada:** el ZIP aportado, incluidas sus pantallas, componentes, jerarquía y flujos. La paleta CSS original (`#fff/#f4f5f7/#e8ebef`, primary `#344b5f`, estados `#275d46/#735315/#8a2f2c`) queda registrada como origen; la dirección de tarjetas grafito y fondos blanco/azul profundo de §11 fue aprobada después mediante Proceed (2026-11-11) y reemplaza solo los tokens de superficie.
+- Mantener una única fuente visual vigente: actualizar DD, design-system y handoff con los tokens aprobados y la fecha de decisión. La variante oscura queda definida en §11. No reproducir la aplicación web píxel a píxel.
 - Conservar contenido, rutas, restricciones y estados reales del producto. Los datos ficticios del prototipo sirven solo como contenido de referencia visual.
 - No importar el código React/CSS, usar WebView, añadir una librería de iconos o modificar contratos/Domain/Data/Room/permisos por motivos estéticos.
 - Mantener semántica accesible, textos de estado, objetivos táctiles ≥48 dp, scroll, tamaño de texto y compatibilidad con insets. No comunicar estados solo mediante color.
@@ -87,7 +87,7 @@ Fuentes de API: [Compose icons](https://developer.android.com/develop/ui/compose
 ## 9. Revisión Ponytail del plan
 
 1. **Cobertura no era completa ni comprobable.** Antes varias pantallas aparecían agrupadas; el plan ahora enumera todas las rutas, formularios, overlays y estados, más requisito de rastrear cada componente al ZIP y a Compose.
-2. **La solución anterior descartaba la paleta del prototipo explícitamente aprobado.** El plan alinea tokens con CSS del ZIP y registra la actualización de D4/SSOT como parte del trabajo aprobado.
+2. **La paleta posterior es un cambio acotado aprobado.** El ZIP sigue gobernando estructura y flujos; la decisión aprobada de §11 sustituye solo superficies y estilos de acción, y sincroniza la fuente visual de diseño.
 3. **La propuesta de iconos contradijo la preferencia del usuario.** Se eliminó Material Symbols/XML del plan. Los cuatro trazados SVG del prototipo se representarán como `ImageVector` local y se dibujarán con el `Icon` de Material 3, sin dependencia nueva.
 4. **Las referencias externas podían ampliar funciones por accidente.** Se limitan a patrones de jerarquía visual; dashboard, DTC y sensores ilustran el dominio, pero se excluyen reset ECU, CAN debug, IA, gráficas y funciones no MVP.
 5. **La comparación original solo nombraba cuatro rutas principales.** Ahora exige capturas de todas las interfaces de §4 en estados pareados y verificaciones de accesibilidad; no se declara fidelidad por build.
@@ -98,38 +98,62 @@ Inspección estática del ZIP, CSS/React, reportes 4.4/4.5, tema Material 3, pal
 
 **Ponytail:** propuesta mínima sin biblioteca nueva ni reescritura de Presentation. Tras aprobación del plan, seguir Coder → Tester → QA/Ponytail y registrar evidencia antes del cierre.
 
-## 11. Seguimiento de Ajustes y contraste de tarjetas (pendiente de aprobación)
+## 11. Seguimiento visual Material 3: tarjetas grafito, contornos y acciones (APROBADO; en implementación)
 
-### Hallazgos y fuente de verdad
+### Auditoría del estado actual
 
-- La captura actual de Ajustes muestra el grupo que contiene el nombre de la aplicación titulado “Vehículo”, aunque su campo es Nombre (opcional) y SettingsViewModel persiste displayName. La especificación UI-07 ya define “Nombre para mostrar opcional”. Cambiar solo el título de la sección a “Nombre”; conservar campo, opcionalidad, guardado y modelo.
-- Color.kt define PrototypeBackground = #EDF0F2, PrototypeSurface2 = #F4F5F7 y PrototypeSurface = #FFFFFF. Theme.kt usa PrototypeBackground para el fondo claro y PrototypeSurface2 como surfaceContainerLow; las Cards estándar/Material 3 usan esa superficie baja. El prototipo aprobado adjunto muestra fondo blanco y tarjetas gris claro.
-- No cambiar Domain, DataStore, tema oscuro, controles semánticos ni navegación; no modificar Figma ni añadir dependencias.
+- La etiqueta de sección “Vehículo” en Ajustes es incorrecta: el campo ya dice “Nombre (opcional)” y SettingsViewModel persiste displayName. UI-07 ya especifica nombre para mostrar; la corrección sigue siendo solo el texto del encabezado.
+- Color.kt ya contiene PrototypeSurface (#FFFFFF), PrototypeDarkSurface (#2B2E33), PrototypeDarkBackground (#202124), PrototypeGood (#275D46) y PrototypeBad (#8A2F2C). Theme.kt asigna el fondo claro actual #EDF0F2, el oscuro #202124 y tarjetas neutrales mediante surfaceContainerLow. Type.kt solo personaliza bodyLarge; los títulos siguen la escala estándar Material 3.
+- Hay Cards distribuidas por Home, Vehículos, Diagnóstico, Conexión, Historial, Mantenimiento y Ajustes. La barra inferior usa NavigationBarItem con indicador de selección Material 3 y los colores actuales del tema.
+- No se modificará Domain, Room/DataStore, lógica de navegación, Figma ni se añadirá dependencia externa.
 
-### Propuesta visual recomendada y alternativas
+### Comparación con las guías oficiales
 
-1. **Recomendada:** asignar el fondo claro a PrototypeSurface (#FFFFFF) y conservar las tarjetas en PrototypeSurface2 (#F4F5F7). Esto separa más las tarjetas del fondo y sigue la captura aprobada. Es un cambio de un token que propaga a las rutas Material 3.
-2. Mantener el fondo y poner todas las Cards en blanco. La separación aumentaría, pero invertiría la relación fondo/tarjeta que muestra el prototipo.
-3. Mantener ambos tokens y añadir bordes a cada Card. Requiere editar muchos call sites para un resultado que ya ofrecen los roles existentes, así que se descarta por alcance y mantenimiento.
+- Material 3 reserva Surface para el fondo y Surface Container para tarjetas y otras áreas elevadas; el sistema usa colores emparejados “on” para que texto/iconos contrasten. Aplicar la misma tarjeta grafito en ambos temas es una decisión de marca válida, pero deja de ser un Surface Container estándar: el plan la modela como color fijo de tarjeta con su propio color de contenido, no alterando onSurface globalmente. Las guías advierten que colores fijos pueden causar problemas de contraste, por lo que se medirán texto y borde en ambos temas. [Color system](https://m3.material.io/styles/color/the-color-system)
+- Compose Material 3 ofrece OutlinedCard para límites visibles, con color, borde y forma configurables. Se usará ese componente para la tarjeta grafito en vez de inventar un componente gráfico o añadir librerías. [Compose Cards](https://developer.android.com/develop/ui/compose/components/card)
+- Los botones Material 3 se jerarquizan por importancia: Filled para acción primaria, Outlined para importancia media y Text para baja. Su guía usa el rol Error para comunicar urgencia; aquí se propone rojo en Cancelar porque es una preferencia explícita del usuario, manteniendo Volver/navegación neutral y reservando el rojo más prominente para acciones destructivas. [Compose Buttons](https://developer.android.com/develop/ui/compose/components/button), [color roles](https://m3.material.io/styles/color/the-color-system)
+- NavigationBarItem ya resalta la selección. Se conservarán sus colores actuales y su indicador; no se añadirá un contorno alrededor de todos los destinos porque duplicaría ese énfasis. [Compose Navigation bar](https://developer.android.com/develop/ui/compose/components/navigation-bar)
+- Material 3 organiza la tipografía en roles display, headline, title, body y label. Se marcarán los roles de encabezado y título, no el texto de cuerpo completo. [Typography](https://m3.material.io/styles/typography/applying-type)
 
-### Archivos y trabajo tras aprobación
+### Propuesta recomendada
 
-- Modificar app/src/main/java/cl/cristian/bitacoraobd/ui/settings/SettingsScreen.kt: texto de encabezado Vehículo → Nombre.
-- Modificar app/src/main/java/cl/cristian/bitacoraobd/ui/theme/Color.kt: asignar PrototypeBackground a PrototypeSurface; conservar PrototypeSurface2 y los roles actuales de Cards en Theme.kt.
-- Actualizar plans/designplans/design-system.md y design-decisions.md para registrar que la referencia aprobada usa fondo blanco/tarjetas #F4F5F7 y que el título de Ajustes representa nombre para mostrar. No tocar archivos Figma.
-- Añadir una prueba Compose mínima que compruebe el encabezado Nombre y el campo opcional, reutilizando infraestructura existente; no crear harness ni dependencia nuevos.
+- Fondo del tema claro: blanco #FFFFFF.
+- Fondo del tema oscuro: azul profundo #0C1420 (preferido sobre negro puro para que el contorno y las superficies tengan un punto de referencia cromático).
+- Relleno único de tarjeta, en ambos temas: grafito #2B2E33, reutilizando el valor ya existente PrototypeDarkSurface.
+- Contenido normal de tarjeta: #F4F5F7; mensajes de error sobre grafito usan rojo suave #F6DFDD para conservar contraste. Contorno de 1 dp: token compartido #87919B. Cálculo sRGB preliminar: contenido/grafito 12,49:1; contorno/grafito 4,25:1; contorno/fondo claro 3,27:1; contorno/fondo oscuro 5,77:1. El relleno grafito/fondo oscuro queda en 1,36:1, por lo que el contorno es necesario. Confirmar contraste visual al renderizar.
+- Tarjetas de estado también conservan grafito; error, vencimiento y éxito se comunican con texto/icono y etiquetas semánticas rojas/verdes/ámbar, no rellenando tarjetas completas con colores de estado.
+- Títulos de pantalla con peso Bold y títulos de sección/tarjeta con SemiBold usando roles existentes de Typography; el cuerpo conserva peso Normal.
+- Las acciones operativas positivas usan verde #275D46; los botones Filled fijan texto blanco. Outlined sobre superficies generales usan `secondary` adaptable al tema; dentro de tarjetas grafito usan texto #F4F5F7 y borde #87919B para mantener contraste. Cancelar usa rojo `error` en superficies generales y #F6DFDD sobre tarjetas grafito; Descartar/Eliminar usa Filled rojo #8A2F2C con texto blanco. Volver/navegar sin cancelar permanece neutral.
+- Navegación inferior conserva los colores actuales y el indicador seleccionado Material 3; se aplica un contorno fino alrededor de la barra completa para separarla del fondo, sin borde individual por destino.
+
+### Decisiones visuales aprobadas por el usuario (Proceed, 2026-11-11; implementadas y verificadas en dispositivo)
+
+1. Aprobar la combinación de fondo claro blanco, fondo oscuro azul profundo #0C1420 y tarjetas grafito #2B2E33 compartidas entre temas, que sustituye únicamente los colores de superficie de la referencia ZIP.
+2. Aplicar verde a acciones operativas positivas con texto blanco en Filled; Outlined sobre fondo general usa `secondary` adaptable y sobre tarjeta grafito texto #F4F5F7/borde #87919B. Cancelar usa rojo `error` en fondos generales y #F6DFDD sobre grafito. Descartar/Eliminar conserva mayor énfasis rojo con texto blanco. Volver/navegar sin cancelar permanece neutral.
+3. Conservar colores e indicador seleccionado de NavigationBarItem. Se propone un contorno fino solo alrededor de la barra inferior completa, no alrededor de cada destino.
+
+### Archivos y trabajo de implementación
+
+- SettingsScreen.kt: cambiar el encabezado Vehículo por Nombre; conservar el campo, valor displayName y guardado.
+- Color.kt y Theme.kt: definir fondo claro/blanco, fondo oscuro azul profundo, tokens fijos de tarjeta grafito, contenido y contorno; mantener correctamente el color de texto de las superficies generales y las acciones semánticas.
+- Crear un único componente pequeño GraphiteCard basado en Material 3 OutlinedCard y reemplazar las Cards neutrales en todas las pantallas; mantener interacciones/callbacks en Modifier y etiquetas de estado. Esto evita repetir colores y bordes en los siete destinos. Las superficies de diálogo/sheets no se convierten en tarjetas.
+- Type.kt: asignar peso Bold a headline y SemiBold a title, sin modificar tamaños, interlineado ni pesos de body/label.
+- Mantener el rol primary actual de navegación; usar verde en acciones operativas positivas, usando texto blanco en Filled y `secondary` en Outlined; adaptar Cancelar al fondo y usar rojo Filled para acciones destructivas.
+- Actualizar design-system.md y design-decisions.md con la nueva dirección visual y la aprobación del usuario; no modificar Figma ni .gitignore.
+- Añadir pruebas Compose mínimas para el encabezado Nombre, estilo de GraphiteCard, acciones y selección de navegación. Reutilizar dependencias e infraestructura existentes.
 
 ### Aceptación y verificación
 
-- Ajustes muestra el grupo Nombre y conserva el campo Nombre (opcional) enlazado a displayName; guardar, cancelar y descartar mantienen el comportamiento aprobado.
-- En tema claro, fondo de pantalla blanco y Cards estándar gris claro; el tema oscuro, tarjetas semánticas de error/estado y colores de controles se mantienen.
-- Comparar captura de Ajustes e Inicio en dispositivo con la referencia y comprobar al menos tema claro/oscuro; verificar que no cambian los estados, navegación ni datos.
-- Tester ejecutará en serie :app:testDebugUnitTest, :app:compileDebugAndroidTestKotlin, :app:connectedDebugAndroidTest, :app:lintDebug, :app:assembleDebug y git diff --check.
-- Después, QA/Ponytail revisará el cambio conectado, KISS, consistencia visual y evidencia de accesibilidad disponible.
+- Ajustes identifica el nombre de la aplicación como “Nombre” y mantiene “Nombre (opcional)” enlazado a displayName; guardar, cancelar y descartar no cambian sus contratos.
+- Todas las tarjetas neutrales de las siete pantallas usan el mismo relleno grafito y contorno; textos/iconos de tarjeta son legibles en claro y oscuro. Estados mantienen mensaje/texto además del color.
+- Las acciones operativas positivas (Agregar, Guardar, Conectar, Actualizar lectura) aparecen en verde; Cancelar aparece en rojo con variante Outlined/Text; eliminar/descartar con pérdida tiene mayor énfasis rojo; volver/navegar sin cancelar permanece neutral. Navegación conserva colores e indicador y usa un contorno fino alrededor de la barra completa.
+- Revisar capturas de Inicio, Ajustes, formularios, error/vencimiento y navegación en claro/oscuro. Verificar texto normal ≥4,5:1, texto grande ≥3:1 y contorno de componente ≥3:1; probar escala de fuente, foco y TalkBack disponible.
+- Gradle secuencial: :app:testDebugUnitTest, :app:compileDebugAndroidTestKotlin, :app:connectedDebugAndroidTest, :app:lintDebug, :app:assembleDebug y git diff --check. No agregar screenshot-testing framework.
 
-### Revisión Ponytail del anexo
+### Skill y revisión Ponytail del plan
 
-- El encabezado se corrige en el único componente que presenta displayName; no se renombra propiedad ni dato persistido.
-- El contraste se resuelve con un token global ya existente y superficies M3 instaladas, sin recorrer todas las Cards ni crear una abstracción.
-- La diferencia solicitada es visual y no introduce cambios de contrato; el tema oscuro se mantiene intacto.
-- **Puerta AGENTS.md:** este anexo queda propuesto. No modificar código ni pruebas hasta que el usuario confirme explícitamente la aprobación (por ejemplo, “Proceed”).
+- Se revisó la skill adaptive disponible: su alcance es navegación/layouts adaptativos y conservación de estado en ventanas/dispositivos; no define estética, paleta ni componentes Material 3. No se aplicará porque esta propuesta no cambia layouts responsivos.
+- No hay una skill dedicada a la estética Material 3 en las skills disponibles. Se usan brainstorming para comparar opciones, Ponytail para limitar código, y las guías oficiales de Material 3 como referencia técnica. No se necesita plugin ni dependencia.
+- Un GraphiteCard común se justifica porque el mismo estilo se aplica a muchas tarjetas y el API Material 3 no ofrece un tema global de borde de Card. Mantenerlo fino y sin API opcional para excepciones especulativas.
+- Riesgo principal: el relleno grafito constante en tema claro se aparta del tratamiento de superficie M3 habitual; se mitiga con el token de contenido emparejado, borde medido y capturas en ambos temas.
+- **Estado:** aprobación explícita recibida mediante Proceed (2026-11-11); implementación terminada y QA/Ponytail **APROBADO**. La revisión encontró y corrigió contraste insuficiente en campos de Mantenimiento y acciones Outlined dentro de tarjetas. JVM (137), AndroidTest (34, 0 fallos, 1 omitido sin `elm327Host`), compilación AndroidTest, lint, assemble y diff-check pasaron. En SM-A066M/API 36 se inspeccionaron Inicio y Ajustes en claro y el campo enfocado; pruebas de píxeles cubren contraste ≥4,5:1 de elementos clave en ambos temas. La escala 1.3 parte “Mantenimiento” en dos líneas; TalkBack y rutas que requieren vehículo quedaron sin revisión manual. Figma no se modificó.

@@ -1,5 +1,6 @@
 package cl.cristian.bitacoraobd.ui.home
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -9,7 +10,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
-import androidx.compose.material3.Card
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -28,8 +29,13 @@ import cl.cristian.bitacoraobd.domain.model.MaintenanceStatus
 import cl.cristian.bitacoraobd.domain.model.TemperatureUnit
 import cl.cristian.bitacoraobd.domain.obd.ObdConnectionState
 import cl.cristian.bitacoraobd.ui.AppSession
+import cl.cristian.bitacoraobd.ui.components.GraphiteCard
 import cl.cristian.bitacoraobd.ui.HomeViewModel
 import cl.cristian.bitacoraobd.ui.theme.PrototypeBad
+import cl.cristian.bitacoraobd.ui.theme.PrototypeCardContent
+import cl.cristian.bitacoraobd.ui.theme.PrototypeGood
+import cl.cristian.bitacoraobd.ui.theme.PrototypeOutline
+import cl.cristian.bitacoraobd.ui.theme.PrototypeSurface
 import cl.cristian.bitacoraobd.ui.theme.PrototypeBadSoft
 import cl.cristian.bitacoraobd.ui.theme.PrototypeWarn
 import cl.cristian.bitacoraobd.ui.theme.PrototypeWarnSoft
@@ -63,21 +69,33 @@ fun HomeScreen(
         )
 
         if (app.vehicleLoadStatus.name == "Ready" && app.vehicles.isEmpty()) {
-            Card(Modifier.fillMaxWidth()) {
+            GraphiteCard(Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     Text("Aún no hay vehículos", style = MaterialTheme.typography.titleLarge)
                     Text("Agrega un vehículo para ver su estado y sus próximos mantenimientos.")
-                    Button(onClick = onVehicles) { Text("Agregar vehículo") }
+                    Button(
+                        onClick = onVehicles,
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = PrototypeGood,
+                            contentColor = PrototypeSurface
+                        )
+                    ) { Text("Agregar vehículo") }
                 }
             }
         } else if (home.loading && home.dashboard == null) {
             CircularProgressIndicator()
         } else if (home.error != null && home.dashboard == null) {
-            Card(Modifier.fillMaxWidth()) {
+            GraphiteCard(Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     Text("No se pudo cargar Inicio", style = MaterialTheme.typography.titleLarge)
                     Text(home.error ?: "Inténtalo nuevamente.")
-                    Button(onClick = viewModel::retry) { Text("Reintentar") }
+                    Button(
+                        onClick = viewModel::retry,
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = PrototypeGood,
+                            contentColor = PrototypeSurface
+                        )
+                    ) { Text("Reintentar") }
                 }
             }
         } else {
@@ -91,21 +109,27 @@ fun HomeScreen(
                 is DashboardState.Ready -> {
                     val summary = dashboard.summary
                     if (summary.activeVehicle.id == app.activeVehicleId) {
-                        Card(Modifier.fillMaxWidth()) {
+                        GraphiteCard(Modifier.fillMaxWidth()) {
                             Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                                 Text("Vehículo activo", style = MaterialTheme.typography.labelLarge,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    color = PrototypeCardContent)
                                 Text(
                                     listOf(summary.activeVehicle.brand, summary.activeVehicle.model)
                                         .filter(String::isNotBlank).joinToString(" ").ifBlank { "Vehículo" },
                                     style = MaterialTheme.typography.titleLarge
                                 )
                                 Text("Conexión: ${connectionLabel(summary.connectionState)}")
-                                Button(onClick = onConnection) { Text("Abrir conexión") }
+                                Button(
+                                    onClick = onConnection,
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = PrototypeGood,
+                                        contentColor = PrototypeSurface
+                                    )
+                                ) { Text("Abrir conexión") }
                             }
                         }
 
-                        Card(Modifier.fillMaxWidth()) {
+                        GraphiteCard(Modifier.fillMaxWidth()) {
                             Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                                 Text("Mantenimiento", style = MaterialTheme.typography.titleLarge)
                                 if (summary.activeMaintenanceSchedules.isEmpty()) {
@@ -138,11 +162,15 @@ fun HomeScreen(
                                         }
                                     }
                                 }
-                                OutlinedButton(onClick = onMaintenance) { Text("Ver mantenimiento") }
+                                OutlinedButton(
+                                    onClick = onMaintenance,
+                                    colors = ButtonDefaults.outlinedButtonColors(contentColor = PrototypeCardContent),
+                                    border = BorderStroke(1.dp, PrototypeOutline)
+                                ) { Text("Ver mantenimiento") }
                             }
                         }
 
-                        Card(Modifier.fillMaxWidth()) {
+                        GraphiteCard(Modifier.fillMaxWidth()) {
                             Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                                 Text("Último diagnóstico", style = MaterialTheme.typography.titleLarge)
                                 val sessionRecord = summary.lastDiagnosticSession
@@ -155,15 +183,25 @@ fun HomeScreen(
                                         style = MaterialTheme.typography.bodyLarge
                                     )
                                     Text(DateFormat.getDateTimeInstance().format(Date(sessionRecord.timestampMillis)),
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                        color = PrototypeCardContent)
                                     summary.codesInLastSession.forEach { code ->
                                         Text("${code.code}: ${code.guidance.description}${if (code.isRecurrent) " · Recurrente" else ""}")
                                     }
                                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                        Button(onClick = { onDetail(summary.activeVehicle.id, sessionRecord.id) }) {
+                                        Button(
+                                            onClick = { onDetail(summary.activeVehicle.id, sessionRecord.id) },
+                                            colors = ButtonDefaults.buttonColors(
+                                                containerColor = PrototypeGood,
+                                                contentColor = PrototypeSurface
+                                            )
+                                        ) {
                                             Text("Ver detalle")
                                         }
-                                        OutlinedButton(onClick = { onHistory(summary.activeVehicle.id) }) {
+                                        OutlinedButton(
+                                            onClick = { onHistory(summary.activeVehicle.id) },
+                                            colors = ButtonDefaults.outlinedButtonColors(contentColor = PrototypeCardContent),
+                                            border = BorderStroke(1.dp, PrototypeOutline)
+                                        ) {
                                             Text("Historial")
                                         }
                                     }
@@ -172,7 +210,7 @@ fun HomeScreen(
                         }
 
                         if (settings.showRpm || settings.showCoolant || settings.showSpeed) {
-                            Card(Modifier.fillMaxWidth()) {
+                            GraphiteCard(Modifier.fillMaxWidth()) {
                                 Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                                     Row(
                                         Modifier.fillMaxWidth(),
@@ -182,7 +220,7 @@ fun HomeScreen(
                                         Text(
                                             "Lectura puntual",
                                             style = MaterialTheme.typography.labelMedium,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            color = PrototypeCardContent
                                         )
                                     }
                                     val metrics = app.metrics?.takeIf { it.first == summary.activeVehicle.id }?.second
@@ -193,7 +231,7 @@ fun HomeScreen(
                                         Text(
                                             "Lectura: ${DateFormat.getDateTimeInstance().format(Date(metrics.timestampMillis))}",
                                             style = MaterialTheme.typography.bodySmall,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            color = PrototypeCardContent
                                         )
                                         val values = buildList {
                                             if (settings.showRpm) add("RPM" to (metrics.rpm?.toString() ?: "No disponible"))
@@ -224,28 +262,46 @@ fun HomeScreen(
                                             }
                                         }
                                         if (connection !is ObdConnectionState.Connected) {
-                                            Text("Desconectado", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                            Text("Desconectado", color = PrototypeCardContent)
                                         }
                                     }
-                                    Button(onClick = onDiagnostic) { Text("Abrir diagnóstico") }
+                                    Button(
+                                        onClick = onDiagnostic,
+                                        colors = ButtonDefaults.buttonColors(
+                                            containerColor = PrototypeGood,
+                                            contentColor = PrototypeSurface
+                                        )
+                                    ) { Text("Abrir diagnóstico") }
                                 }
                             }
                         }
                     }
                 }
                 DashboardState.NoVehicles -> {
-                    Card(Modifier.fillMaxWidth()) {
+                    GraphiteCard(Modifier.fillMaxWidth()) {
                         Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                             Text("Aún no hay vehículos", style = MaterialTheme.typography.titleLarge)
-                            Button(onClick = onVehicles) { Text("Agregar vehículo") }
+                            Button(
+                                onClick = onVehicles,
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = PrototypeGood,
+                                    contentColor = PrototypeSurface
+                                )
+                            ) { Text("Agregar vehículo") }
                         }
                     }
                 }
                 null -> if (app.vehicleLoadStatus.name == "Failed") {
-                    Card(Modifier.fillMaxWidth()) {
+                    GraphiteCard(Modifier.fillMaxWidth()) {
                         Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                             Text(app.error ?: "No se pudieron cargar los vehículos")
-                            Button(onClick = session::refreshVehicleContext) { Text("Reintentar") }
+                            Button(
+                                onClick = session::refreshVehicleContext,
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = PrototypeGood,
+                                    contentColor = PrototypeSurface
+                                )
+                            ) { Text("Reintentar") }
                         }
                     }
                 }
@@ -258,10 +314,10 @@ fun HomeScreen(
 
 @Composable
 private fun MetricCard(label: String, value: String, modifier: Modifier = Modifier) {
-    Card(modifier) {
+    GraphiteCard(modifier) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text(label, style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant)
+                color = PrototypeCardContent)
             Text(value, style = MaterialTheme.typography.titleMedium)
         }
     }

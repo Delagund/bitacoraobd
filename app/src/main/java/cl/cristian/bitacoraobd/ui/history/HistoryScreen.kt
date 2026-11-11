@@ -11,9 +11,8 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Button
-import androidx.compose.material3.Card
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -23,7 +22,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import cl.cristian.bitacoraobd.domain.model.DiagnosticSession
 import cl.cristian.bitacoraobd.domain.model.DistanceUnit
+import cl.cristian.bitacoraobd.ui.components.GraphiteCard
 import cl.cristian.bitacoraobd.ui.formatDistance
+import cl.cristian.bitacoraobd.ui.theme.PrototypeCardContent
+import cl.cristian.bitacoraobd.ui.theme.PrototypeGood
+import cl.cristian.bitacoraobd.ui.theme.PrototypeSurface
 import java.text.DateFormat
 import java.util.Date
 
@@ -45,26 +48,26 @@ fun HistoryScreen(
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
         when (val value = state) {
-            HistoryLoad.Loading -> Card(Modifier.fillMaxWidth()) {
+            HistoryLoad.Loading -> GraphiteCard(Modifier.fillMaxWidth()) {
                 Text("Cargando historial…", Modifier.padding(20.dp), style = MaterialTheme.typography.bodyLarge)
             }
-            is HistoryLoad.Failed -> Card(Modifier.fillMaxWidth()) {
+            is HistoryLoad.Failed -> GraphiteCard(Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Text(value.message, color = MaterialTheme.colorScheme.error)
-                    OutlinedButton(onClick = { viewModel.retry(vehicleId) }) { Text("Reintentar") }
+                    Text(value.message, color = PrototypeCardContent)
+                    Button(onClick = { viewModel.retry(vehicleId) }, colors = ButtonDefaults.buttonColors(containerColor = PrototypeGood, contentColor = PrototypeSurface)) { Text("Reintentar") }
                 }
             }
             is HistoryLoad.Ready -> if (value.value.isEmpty()) {
-                Card(Modifier.fillMaxWidth()) {
+                GraphiteCard(Modifier.fillMaxWidth()) {
                     Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         Text("Aún no hay diagnósticos guardados", style = MaterialTheme.typography.titleMedium)
-                        Text("Las sesiones que guardes aparecerán aquí.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text("Las sesiones que guardes aparecerán aquí.", color = PrototypeCardContent)
                     }
                 }
             } else {
                 LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     items(value.value, key = { it.id }) { session ->
-                        Card(
+                        GraphiteCard(
                             modifier = Modifier.fillMaxWidth().clickable { onOpenSession(session.id) }
                         ) {
                             Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -76,7 +79,7 @@ fun HistoryScreen(
                                 Text(
                                     if (session.codes.isEmpty()) "Sin códigos" else "${session.codes.size} códigos",
                                     style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    color = PrototypeCardContent
                                 )
                             }
                         }
@@ -102,29 +105,29 @@ fun DiagnosticDetailScreen(
     ) {
         Text("Detalle del diagnóstico", style = MaterialTheme.typography.headlineMedium)
         when (val value = state) {
-            null, HistoryLoad.Loading -> Card(Modifier.fillMaxWidth()) {
+            null, HistoryLoad.Loading -> GraphiteCard(Modifier.fillMaxWidth()) {
                 Text("Cargando diagnóstico…", Modifier.padding(20.dp), style = MaterialTheme.typography.bodyLarge)
             }
-            is HistoryLoad.Failed -> Card(Modifier.fillMaxWidth()) {
+            is HistoryLoad.Failed -> GraphiteCard(Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Text(value.message, color = MaterialTheme.colorScheme.error)
-                    Button(onClick = { viewModel.retryDetail(vehicleId, sessionId) }) { Text("Reintentar") }
+                    Text(value.message, color = PrototypeCardContent)
+                    Button(onClick = { viewModel.retryDetail(vehicleId, sessionId) }, colors = ButtonDefaults.buttonColors(containerColor = PrototypeGood, contentColor = PrototypeSurface)) { Text("Reintentar") }
                 }
             }
             is HistoryLoad.Ready -> {
                 val session: DiagnosticSession = value.value.session
-                Card(Modifier.fillMaxWidth()) {
+                GraphiteCard(Modifier.fillMaxWidth()) {
                     Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         Text(DateFormat.getDateTimeInstance().format(Date(session.timestampMillis)), style = MaterialTheme.typography.titleLarge)
                         Text("Kilometraje: ${formatDistance(session.mileageAtScanKm, distanceUnit)}", style = MaterialTheme.typography.bodyLarge)
-                        if (value.value.codes.isEmpty()) Text("Sin códigos almacenados", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        else Text("${value.value.codes.size} códigos encontrados", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        if (value.value.codes.isEmpty()) Text("Sin códigos almacenados", color = PrototypeCardContent)
+                        else Text("${value.value.codes.size} códigos encontrados", color = PrototypeCardContent)
                     }
                 }
                 value.value.codes.forEach { code ->
-                    Card(Modifier.fillMaxWidth()) {
+                    GraphiteCard(Modifier.fillMaxWidth()) {
                         Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Text(code.code, style = MaterialTheme.typography.headlineSmall, color = MaterialTheme.colorScheme.primary)
+                            Text(code.code, style = MaterialTheme.typography.headlineSmall, color = PrototypeCardContent)
                             Text(if (code.isRecurrent) "Código recurrente" else "Primera aparición", style = MaterialTheme.typography.labelLarge)
                             Text(code.guidance.description, style = MaterialTheme.typography.bodyLarge)
                             if (code.guidance.isKnownInCatalog) {

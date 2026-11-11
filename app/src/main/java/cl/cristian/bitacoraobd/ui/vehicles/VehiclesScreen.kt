@@ -1,5 +1,6 @@
 package cl.cristian.bitacoraobd.ui.vehicles
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -13,12 +14,11 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
-import androidx.compose.material3.Card
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -32,6 +32,14 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.runtime.collectAsState
 import cl.cristian.bitacoraobd.ui.AppSession
 import cl.cristian.bitacoraobd.ui.VehicleRecovery
+import cl.cristian.bitacoraobd.ui.components.GraphiteCard
+import cl.cristian.bitacoraobd.ui.theme.PrototypeBad
+import cl.cristian.bitacoraobd.ui.theme.PrototypeBadSoft
+import cl.cristian.bitacoraobd.ui.theme.PrototypeCardContent
+import cl.cristian.bitacoraobd.ui.theme.PrototypeGood
+import cl.cristian.bitacoraobd.ui.theme.PrototypeGoodSoft
+import cl.cristian.bitacoraobd.ui.theme.PrototypeOutline
+import cl.cristian.bitacoraobd.ui.theme.PrototypeSurface
 
 @Composable
 fun VehiclesScreen(
@@ -66,7 +74,7 @@ fun VehiclesScreen(
             title = { Text("Descartar cambios") },
             text = { Text("Se perderán los cambios del vehículo.") },
             confirmButton = {
-                TextButton(onClick = { confirmDiscard = false; viewModel.discard() }) { Text("Descartar") }
+                Button(onClick = { confirmDiscard = false; viewModel.discard() }, colors = ButtonDefaults.buttonColors(containerColor = PrototypeBad, contentColor = PrototypeSurface)) { Text("Descartar") }
             },
             dismissButton = { TextButton(onClick = { confirmDiscard = false }) { Text("Seguir editando") } }
         )
@@ -81,54 +89,50 @@ fun VehiclesScreen(
                 state.vehicleLoadStatus.name == "Loading" -> Text("Cargando vehículos…")
                 state.vehicleLoadStatus.name == "Failed" -> {
                     Text(state.error ?: "No se pudieron cargar los vehículos")
-                    OutlinedButton(onClick = { session.refreshVehicleContext() }) { Text("Reintentar") }
+                    OutlinedButton(onClick = { session.refreshVehicleContext() }, colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.secondary), border = BorderStroke(1.dp, MaterialTheme.colorScheme.secondary)) { Text("Reintentar") }
                 }
                 state.vehicles.isEmpty() -> {
                     Text("Aún no hay vehículos")
-                    Button(onClick = viewModel::addVehicle) { Text("Agregar vehículo") }
+                    Button(onClick = viewModel::addVehicle, colors = ButtonDefaults.buttonColors(containerColor = PrototypeGood, contentColor = PrototypeSurface)) { Text("Agregar vehículo") }
                 }
                 else -> {
                     if (state.error != null) Text(state.error!!, color = MaterialTheme.colorScheme.error)
                     LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                         items(state.vehicles, key = { it.id }) { vehicle ->
-                            Card(Modifier.fillMaxWidth()) {
+                            GraphiteCard(Modifier.fillMaxWidth()) {
                                 Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                                     Text(listOf(vehicle.brand, vehicle.model).filter { it.isNotBlank() }.joinToString(" ").ifBlank { "Vehículo" }, style = MaterialTheme.typography.titleLarge)
                                     Text(buildString {
                                         if (vehicle.year > 0) append(vehicle.year)
                                         append(if (isNotEmpty()) " · " else "")
                                         append("${vehicle.currentMileageKm} km")
-                                    }, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    }, color = PrototypeCardContent.copy(alpha = 0.75f))
                                     if (vehicle.id == state.activeVehicleId) {
-                                        Surface(color = MaterialTheme.colorScheme.secondaryContainer, shape = MaterialTheme.shapes.small) {
-                                            Text("Activo", Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
-                                                color = MaterialTheme.colorScheme.onSecondaryContainer,
-                                                style = MaterialTheme.typography.labelMedium)
-                                        }
+                                        Text("Activo", color = PrototypeGoodSoft, style = MaterialTheme.typography.labelMedium)
                                     }
                                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                         if (vehicle.id != state.activeVehicleId) {
                                             OutlinedButton(onClick = {
                                                 session.selectVehicle(vehicle.id)
-                                            }) { Text("Usar") }
+                                            }, colors = ButtonDefaults.outlinedButtonColors(contentColor = PrototypeCardContent), border = BorderStroke(1.dp, PrototypeOutline)) { Text("Usar") }
                                         }
-                                        TextButton(onClick = { viewModel.editVehicle(vehicle.id) }) { Text("Editar") }
-                                        TextButton(onClick = { deleteId = vehicle.id }) { Text("Eliminar") }
+                                        TextButton(onClick = { viewModel.editVehicle(vehicle.id) }, colors = ButtonDefaults.textButtonColors(contentColor = PrototypeCardContent)) { Text("Editar") }
+                                        TextButton(onClick = { deleteId = vehicle.id }, colors = ButtonDefaults.textButtonColors(contentColor = PrototypeBadSoft)) { Text("Eliminar") }
                                     }
                                 }
                             }
                         }
                     }
-                    Button(onClick = viewModel::addVehicle) { Text("Agregar vehículo") }
+                    Button(onClick = viewModel::addVehicle, colors = ButtonDefaults.buttonColors(containerColor = PrototypeGood, contentColor = PrototypeSurface)) { Text("Agregar vehículo") }
                 }
             }
             state.vehicleActionResult?.let { result ->
                 if (result.error != null) {
                     Text(result.error, color = MaterialTheme.colorScheme.error)
                     if (result.recovery == VehicleRecovery.RetrySelection && result.vehicleId != null) {
-                        Button(onClick = { session.retryVehicleSelection(result.vehicleId) }) { Text("Reintentar selección") }
+                        Button(onClick = { session.retryVehicleSelection(result.vehicleId) }, colors = ButtonDefaults.buttonColors(containerColor = PrototypeGood, contentColor = PrototypeSurface)) { Text("Reintentar selección") }
                     } else if (result.recovery == VehicleRecovery.RefreshOnly || result.recovery == VehicleRecovery.Reconcile) {
-                        OutlinedButton(onClick = { session.retryVehicleRecovery(result.id) }) { Text("Actualizar lista") }
+                        OutlinedButton(onClick = { session.retryVehicleRecovery(result.id) }, colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.secondary), border = BorderStroke(1.dp, MaterialTheme.colorScheme.secondary)) { Text("Actualizar lista") }
                     }
                 }
             }
@@ -141,9 +145,9 @@ fun VehiclesScreen(
             title = { Text("Eliminar vehículo") },
             text = { Text("Se eliminarán también sus diagnósticos y mantenimientos. ¿Continuar?") },
             confirmButton = {
-                TextButton(onClick = { deleteId = null; session.deleteVehicle(id) }) { Text("Eliminar") }
+                Button(onClick = { deleteId = null; session.deleteVehicle(id) }, colors = ButtonDefaults.buttonColors(containerColor = PrototypeBad, contentColor = PrototypeSurface)) { Text("Eliminar") }
             },
-            dismissButton = { TextButton(onClick = { deleteId = null }) { Text("Cancelar") } }
+            dismissButton = { TextButton(onClick = { deleteId = null }, colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)) { Text("Cancelar") } }
         )
     }
 }
@@ -172,8 +176,8 @@ private fun VehicleForm(draft: VehicleDraft, viewModel: VehiclesViewModel, savin
         }
         draft.error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Button(enabled = !saving, onClick = viewModel::save) { Text("Guardar") }
-            TextButton(enabled = !saving, onClick = onCancel) { Text("Cancelar") }
+            Button(enabled = !saving, onClick = viewModel::save, colors = ButtonDefaults.buttonColors(containerColor = PrototypeGood, contentColor = PrototypeSurface)) { Text("Guardar") }
+            TextButton(enabled = !saving, onClick = onCancel, colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)) { Text("Cancelar") }
         }
     }
 }

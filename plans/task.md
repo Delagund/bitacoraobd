@@ -564,3 +564,26 @@ Plan aprobado por el usuario: Material 3 solamente, sin Material Symbols. Se aut
 - [x] Revisión conectada: visibilidad de métricas y estado vacío de Mantenimiento; no se hallaron otros defectos bloqueantes.
 - [x] Sin Material Symbols/dependencias nuevas ni expansión de funciones fuera del prototipo.
 - [x] Cierre y reporte formal: plans/reporte_fidelidad_prototipo.md.
+
+---
+
+## Seguimiento visual Material 3: paleta grafito y acciones (CERRADA; QA APROBADO)
+
+Extensión del plan aprobada por el usuario con “Proceed” el 2026-11-11. La implementación de fidelidad del prototipo ya cerrada se conserva; este checklist cubre el cambio visual posterior de §11.
+
+### Fase A — Implementación de Código (Coder; COMPLETADA)
+- [x] A1. Actualizar tokens de tema claro/oscuro y tipografía según §11; mantener tarjetas grafito y color de contenido legible en ambos temas.
+- [x] A2. Añadir `GraphiteCard` basado en Material 3 OutlinedCard y migrar las tarjetas de las siete áreas UI sin cambiar callbacks, estado ni semántica.
+- [x] A3. Aplicar verde a acciones operativas positivas, rojo Outlined/Text a Cancelar y mayor énfasis rojo solo a las acciones destructivas existentes; acciones Outlined sobre tarjetas y campos de formularios usan pares legibles. Volver y navegación sin cancelar permanecen neutrales.
+- [x] A4. Cambiar el encabezado “Vehículo” de Ajustes a “Nombre” y añadir el contorno perimetral fino de la barra inferior, manteniendo color e indicador seleccionado.
+- [x] A5. Sincronizar design-system.md y design-decisions.md con los tokens aprobados; no modificar Figma, Domain/Data, esquema ni dependencias.
+
+### Fase B — Tests TDD (Tester; COMPLETADA)
+- [x] B1. Compose: `settingsNamesTheSectionNombreWithoutVehiculo`, `graphiteCardUsesFixedFillAndOutlineInBothThemes`, `unselectedMillasTextContrastsWithGraphiteInBothThemes`, `vehicleFormUsesGreenSaveAndRedCancelar`, `maintenanceFieldLabelContrastsWithGraphiteInBothThemes`; acciones inspeccionadas dentro de sus límites semánticos. La prueba existente `HomeTabReactivationTest` conserva la comprobación de destino seleccionado.
+- [x] B2. Secuencia completa en orden: `:app:testDebugUnitTest` (137 sin fallos), `:app:compileDebugAndroidTestKotlin`, `:app:connectedDebugAndroidTest` (34 casos, 0 fallos, 1 omitido), `:app:lintDebug`, `:app:assembleDebug` y `git diff --check`; SM-A066M/API 36 (Android 16). La omisión es ELM327 remoto por falta de `elm327Host`. La compilación informó una advertencia deprecada para `Modifier.menuAnchor()` en Mantenimiento; lint pasó.
+- [x] B3. Capturas manuales de Inicio/Ajustes en claro, enfoque del campo Nombre e insets; pruebas de píxeles de GraphiteCard, “Millas” y campo de Mantenimiento verifican contraste ≥4,5:1 en ambos temas. La captura completa de Ajustes oscuro no fue concluyente. Con escala de fuente 1.3, “Mantenimiento” se parte en dos líneas en la navegación inferior; se restauró 1.0. TalkBack no se verificó manualmente. Sin vehículo disponible, no se inspeccionaron Mantenimiento con formulario, Historial/detalle ni Conexión contextual.
+
+### Fase C — Code Review & QA (Ponytail Reviewer; APROBADA)
+- [x] C1. Revisión conectada encontró campos de Mantenimiento y acciones Outlined de bajo contraste sobre tarjetas; se corrigieron los campos y controles afectados, y la segunda revisión emitió APROBADO.
+- [x] C2. Confirmado que no se cambiaron contratos, persistencia, interacciones funcionales ni datos; sin dependencias nuevas, Domain/Data ni esquema Room.
+- [x] C3. Reporte formal de seguimiento actualizado en `reporte_fidelidad_prototipo.md`; límites y hallazgo de escala de fuente documentados.

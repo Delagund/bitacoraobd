@@ -1,5 +1,6 @@
 package cl.cristian.bitacoraobd.ui.diagnostic
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -8,8 +9,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
@@ -24,7 +24,12 @@ import cl.cristian.bitacoraobd.domain.repository.DiagnosticRepository
 import cl.cristian.bitacoraobd.ui.AppSession
 import cl.cristian.bitacoraobd.ui.ExitAction
 import cl.cristian.bitacoraobd.ui.VehicleLoadStatus
+import cl.cristian.bitacoraobd.ui.components.GraphiteCard
 import cl.cristian.bitacoraobd.ui.navigation.AppRoute
+import cl.cristian.bitacoraobd.ui.theme.PrototypeBadSoft
+import cl.cristian.bitacoraobd.ui.theme.PrototypeCardContent
+import cl.cristian.bitacoraobd.ui.theme.PrototypeGood
+import cl.cristian.bitacoraobd.ui.theme.PrototypeSurface
 
 @Composable
 fun DiagnosticScreen(session: AppSession, diagnostics: DiagnosticRepository, onHistory: (Long) -> Unit = {}) {
@@ -49,7 +54,7 @@ fun DiagnosticScreen(session: AppSession, diagnostics: DiagnosticRepository, onH
 
         when (state.vehicleLoadStatus) {
             VehicleLoadStatus.Loading -> {
-                Card(Modifier.fillMaxWidth()) {
+                GraphiteCard(Modifier.fillMaxWidth()) {
                     Text(
                         "Cargando vehículo…",
                         Modifier.padding(20.dp),
@@ -59,13 +64,13 @@ fun DiagnosticScreen(session: AppSession, diagnostics: DiagnosticRepository, onH
                 return@Column
             }
             VehicleLoadStatus.Failed -> {
-                Card(Modifier.fillMaxWidth()) {
+                GraphiteCard(Modifier.fillMaxWidth()) {
                     Column(
                         Modifier.padding(20.dp),
                         verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
                         Text("No se pudo cargar el vehículo", style = MaterialTheme.typography.titleMedium)
-                        Button(onClick = session::refreshVehicleContext) { Text("Reintentar") }
+                        Button(onClick = session::refreshVehicleContext, colors = ButtonDefaults.buttonColors(containerColor = PrototypeGood, contentColor = PrototypeSurface)) { Text("Reintentar") }
                     }
                 }
                 return@Column
@@ -75,16 +80,13 @@ fun DiagnosticScreen(session: AppSession, diagnostics: DiagnosticRepository, onH
 
         val vehicle = state.vehicles.firstOrNull { it.id == state.activeVehicleId }
         if (vehicle == null) {
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
-            ) {
+            GraphiteCard(modifier = Modifier.fillMaxWidth()) {
                 Column(
                     Modifier.padding(20.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     Text("Agrega un vehículo para comenzar", style = MaterialTheme.typography.titleLarge)
-                    Button(onClick = { session.requestExit(ExitAction.ToRoute(AppRoute.VEHICLES)) }) {
+                    Button(onClick = { session.requestExit(ExitAction.ToRoute(AppRoute.VEHICLES)) }, colors = ButtonDefaults.buttonColors(containerColor = PrototypeGood, contentColor = PrototypeSurface)) {
                         Text("Agregar vehículo")
                     }
                 }
@@ -92,25 +94,23 @@ fun DiagnosticScreen(session: AppSession, diagnostics: DiagnosticRepository, onH
             return@Column
         }
 
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
-        ) {
+        GraphiteCard(modifier = Modifier.fillMaxWidth()) {
             Column(
                 Modifier.padding(20.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                Text("Vehículo seleccionado", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text("Vehículo seleccionado", style = MaterialTheme.typography.labelLarge, color = PrototypeCardContent)
                 Text("${vehicle.brand} ${vehicle.model}", style = MaterialTheme.typography.titleLarge)
-                OutlinedButton(onClick = { onHistory(vehicle.id) }) { Text("Ver historial") }
+                OutlinedButton(
+                    onClick = { onHistory(vehicle.id) },
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = PrototypeCardContent),
+                    border = BorderStroke(1.dp, PrototypeCardContent)
+                ) { Text("Ver historial") }
             }
         }
 
         if (connection !is ObdConnectionState.Connected) {
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)
-            ) {
+            GraphiteCard(modifier = Modifier.fillMaxWidth()) {
                 Column(
                     Modifier.padding(20.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
@@ -120,7 +120,7 @@ fun DiagnosticScreen(session: AppSession, diagnostics: DiagnosticRepository, onH
                         "Conecta el adaptador OBD para iniciar un escaneo.",
                         style = MaterialTheme.typography.bodyMedium
                     )
-                    Button(onClick = { session.requestExit(ExitAction.ToRoute(AppRoute.CONNECTION)) }) {
+                    Button(onClick = { session.requestExit(ExitAction.ToRoute(AppRoute.CONNECTION)) }, colors = ButtonDefaults.buttonColors(containerColor = PrototypeGood, contentColor = PrototypeSurface)) {
                         Text("Abrir conexión")
                     }
                 }
@@ -131,14 +131,15 @@ fun DiagnosticScreen(session: AppSession, diagnostics: DiagnosticRepository, onH
             Button(
                 onClick = session::scanDiagnostic,
                 enabled = state.operation == null,
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier.fillMaxWidth(),
+                colors = ButtonDefaults.buttonColors(containerColor = PrototypeGood, contentColor = PrototypeSurface)
             ) {
                 Text(if (state.savedDiagnostic != null) "Nuevo escaneo" else "Escanear códigos")
             }
         }
 
         if (state.operation == "scan") {
-            Card(Modifier.fillMaxWidth()) {
+            GraphiteCard(Modifier.fillMaxWidth()) {
                 Text(
                     "Escaneando…",
                     Modifier.padding(20.dp),
@@ -147,7 +148,7 @@ fun DiagnosticScreen(session: AppSession, diagnostics: DiagnosticRepository, onH
             }
         }
         if (state.scanCancelled) {
-            Card(Modifier.fillMaxWidth()) {
+            GraphiteCard(Modifier.fillMaxWidth()) {
                 Text(
                     "Se canceló el último escaneo; no se guardó una captura nueva.",
                     Modifier.padding(20.dp),
@@ -156,21 +157,18 @@ fun DiagnosticScreen(session: AppSession, diagnostics: DiagnosticRepository, onH
             }
         }
         state.error?.let { message ->
-            Card(
-                Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer)
-            ) {
+            GraphiteCard(Modifier.fillMaxWidth()) {
                 Text(
                     message,
                     Modifier.padding(20.dp),
-                    color = MaterialTheme.colorScheme.onErrorContainer
+                    color = PrototypeCardContent
                 )
             }
         }
 
         val result: DiagnosticScanResult.Success? = state.pendingDiagnostic ?: state.savedDiagnostic
         result?.takeIf { it.vehicleId == vehicle.id }?.let { capture ->
-            Card(Modifier.fillMaxWidth()) {
+            GraphiteCard(Modifier.fillMaxWidth()) {
                 Column(
                     Modifier.padding(20.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
@@ -187,18 +185,16 @@ fun DiagnosticScreen(session: AppSession, diagnostics: DiagnosticRepository, onH
                         Text(
                             "Si cierras la app antes de guardar, perderás esta captura.",
                             style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            color = PrototypeCardContent
                         )
                     }
                     Text(
                         "Capturado ${java.text.DateFormat.getDateTimeInstance().format(capture.timestampMillis)}",
                         style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        color = PrototypeCardContent
                     )
                     if (capture.codes.isEmpty()) {
-                        Card(
-                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)
-                        ) {
+                        GraphiteCard {
                             Text(
                                 "Sin códigos almacenados",
                                 Modifier.padding(16.dp),
@@ -208,9 +204,7 @@ fun DiagnosticScreen(session: AppSession, diagnostics: DiagnosticRepository, onH
                     }
                     capture.codes.forEach { code ->
                         val guidance = diagnostics.getDtcGuidance(code)
-                        Card(
-                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
-                        ) {
+                        GraphiteCard {
                             Column(
                                 Modifier.padding(16.dp),
                                 verticalArrangement = Arrangement.spacedBy(8.dp)
@@ -230,7 +224,8 @@ fun DiagnosticScreen(session: AppSession, diagnostics: DiagnosticRepository, onH
                         Button(
                             onClick = session::savePendingDiagnostic,
                             enabled = state.operation != "save",
-                            modifier = Modifier.fillMaxWidth()
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = ButtonDefaults.buttonColors(containerColor = PrototypeGood, contentColor = PrototypeSurface)
                         ) {
                             Text(if (state.error != null) "Reintentar guardado" else "Guardar diagnóstico")
                         }
@@ -240,12 +235,14 @@ fun DiagnosticScreen(session: AppSession, diagnostics: DiagnosticRepository, onH
                                 session.requestExit(ExitAction.ToRoute(AppRoute.HOME))
                             },
                             enabled = state.operation != "save",
-                            modifier = Modifier.fillMaxWidth()
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = ButtonDefaults.outlinedButtonColors(contentColor = PrototypeBadSoft),
+                            border = BorderStroke(1.dp, PrototypeBadSoft)
                         ) {
                             Text("Descartar y volver a Inicio")
                         }
                     } else {
-                        Button(
+                        OutlinedButton(
                             onClick = { session.requestExit(ExitAction.ToRoute(AppRoute.HOME)) },
                             modifier = Modifier.fillMaxWidth()
                         ) {

@@ -1,6 +1,8 @@
 package cl.cristian.bitacoraobd
 
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsSelected
+import androidx.compose.ui.test.onLast
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
@@ -77,7 +79,9 @@ class HomeTabReactivationTest {
         composeRule.onNodeWithText("Próximo").assertIsDisplayed()
 
         composeRule.onNodeWithText("Vehículos").performClick()
+        composeRule.onAllNodesWithText("Vehículos").onLast().assertIsSelected()
         composeRule.onNodeWithText("Inicio").performClick()
+        composeRule.onAllNodesWithText("Inicio").onLast().assertIsSelected()
         composeRule.waitUntil(5_000) {
             composeRule.onAllNodesWithText("Vencido").fetchSemanticsNodes().isNotEmpty()
         }
