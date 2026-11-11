@@ -15,6 +15,11 @@ import cl.cristian.bitacoraobd.domain.repository.VehicleRepository
 import cl.cristian.bitacoraobd.domain.usecase.DeleteVehicleUseCase
 import cl.cristian.bitacoraobd.domain.usecase.SaveDiagnosticSessionUseCase
 import cl.cristian.bitacoraobd.domain.usecase.ScanDiagnosticCodesUseCase
+import cl.cristian.bitacoraobd.ui.connection.ConnectionViewModel
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.setMain
+import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -51,6 +56,190 @@ class AppSessionTest {
 
         assertTrue(gateway.connectionState.value is ObdConnectionState.Connected)
         assertEquals(0, gateway.disconnectCalls)
+    }
+
+    @Test
+    fun connectionFormRejectsInvalidAddressAndPortWithoutOpeningSocket() = runTest {
+        val dispatcher = StandardTestDispatcher(testScheduler)
+        Dispatchers.setMain(dispatcher)
+        try {
+            val gateway = FakeGateway()
+            val fixture = Fixture(gateway, backgroundScope)
+            val model = ConnectionViewModel(fixture.session, fixture.preferences)
+            runCurrent()
+            assertEquals(false, model.dirty)
+            model.editIp("not an IP")
+            model.editPort("0")
+            assertEquals(true, model.dirty)
+            model.connect()
+            runCurrent()
+            assertEquals(0, gateway.connectCalls)
+            assertTrue(model.error != null)
+            model.discard()
+            assertEquals(false, model.dirty)
+            assertEquals("192.168.0.10", model.ip)
+        } finally {
+            Dispatchers.resetMain()
+        }
+    }
+
+    @Test
+    fun failedConfigWriteKeepsConnectionAndRetriesSameEndpoint() = runTest {
+        val gateway = FakeGateway()
+        val fixture = Fixture(gateway, backgroundScope)
+        val config = ObdConnectionConfig("192.168.0.10", 35000)
+        fixture.preferences.failNextConfigSave = true
+        gateway.connectResult.complete(ObdResult.Success(Unit))
+        runCurrent()
+
+        fixture.session.connect(config, localNetworkAllowed = true)
+        runCurrent()
+        assertTrue(gateway.connectionState.value is ObdConnectionState.Connected)
+        assertEquals(config, fixture.session.state.value.connectedConfigSavePending)
+        assertEquals(1, gateway.connectCalls)
+        assertEquals(1, fixture.preferences.configSaveCalls)
+
+        fixture.session.retryConnectedConfigSave()
+        runCurrent()
+        assertEquals(2, fixture.preferences.configSaveCalls)
+        assertEquals(config, fixture.preferences.lastSavedConfig)
+        assertNull(fixture.session.state.value.connectedConfigSavePending)
+        assertEquals(1, gateway.connectCalls)
+    }
+
+    @Test
+    fun savedCaptureRetainsIdentityWhenNextScanFails() = runTest {
+        val gateway = FakeGateway().apply { setState(ObdConnectionState.Connected(ObdConnectionConfig())) }
+        val fixture = Fixture(gateway, backgroundScope)
+        runCurrent()
+        fixture.session.scanDiagnostic()
+        runCurrent()
+        val first = fixture.session.state.value.pendingDiagnostic!!
+        fixture.session.savePendingDiagnostic()
+        runCurrent()
+        assertEquals(first, fixture.session.state.value.savedDiagnostic)
+        assertEquals(1L, fixture.session.state.value.savedDiagnosticId)
+
+        gateway.scanResult = ObdResult.Failure("scan failed")
+        fixture.session.scanDiagnostic()
+        runCurrent()
+        assertEquals(first, fixture.session.state.value.savedDiagnostic)
+        assertEquals(1L, fixture.session.state.value.savedDiagnosticId)
+        assertEquals("scan failed", fixture.session.state.value.error)
+        assertTrue(fixture.session.state.value.scanFailed)
+        assertNull(fixture.session.state.value.pendingDiagnostic)
+    }
+
+    @Test
+    fun newSuccessfulScanReplacesSavedCaptureWithoutInheritedIdentity() = runTest {
+        val gateway = FakeGateway().apply { setState(ObdConnectionState.Connected(ObdConnectionConfig())) }
+        val fixture = Fixture(gateway, backgroundScope)
+        runCurrent()
+        fixture.session.scanDiagnostic()
+        runCurrent()
+        val first = fixture.session.state.value.pendingDiagnostic!!
+        fixture.session.savePendingDiagnostic()
+        runCurrent()
+        gateway.scanResult = ObdResult.Success(listOf("P0300"))
+
+        fixture.session.scanDiagnostic()
+        runCurrent()
+        val next = fixture.session.state.value.pendingDiagnostic!!
+        assertTrue(first.captureId != next.captureId)
+        assertEquals(listOf("P0300"), next.codes)
+        assertNull(fixture.session.state.value.savedDiagnostic)
+        assertNull(fixture.session.state.value.savedDiagnosticId)
+    }
+
+    @Test
+    fun pendingEndpointSurvivesDisconnectAndBlocksAnotherHandshake() = runTest {
+        val gateway = FakeGateway()
+        val fixture = Fixture(gateway, backgroundScope)
+        val original = ObdConnectionConfig("192.168.0.10", 35000)
+        val replacement = ObdConnectionConfig("192.168.0.11", 35000)
+        fixture.preferences.failNextConfigSave = true
+        gateway.connectResult.complete(ObdResult.Success(Unit))
+        runCurrent()
+        fixture.session.connect(original, localNetworkAllowed = true)
+        runCurrent()
+        fixture.session.disconnect()
+        runCurrent()
+        fixture.session.connect(replacement, localNetworkAllowed = true)
+        runCurrent()
+        assertEquals(original, fixture.session.state.value.connectedConfigSavePending)
+        assertEquals(1, gateway.connectCalls)
+    }
+
+    @Test
+    fun switchingFromAtoBAndBackDoesNotResurfaceOldCaptureOrMetrics() = runTest {
+        val gateway = FakeGateway().apply { setState(ObdConnectionState.Connected(ObdConnectionConfig())) }
+        val fixture = Fixture(gateway, backgroundScope)
+        runCurrent()
+        fixture.session.scanDiagnostic()
+        runCurrent()
+        fixture.session.savePendingDiagnostic()
+        runCurrent()
+        fixture.session.readMetrics()
+        runCurrent()
+        assertTrue(fixture.session.state.value.savedDiagnostic != null)
+        assertTrue(fixture.session.state.value.metrics != null)
+
+        fixture.session.disconnect()
+        runCurrent()
+        fixture.session.selectVehicle(2L)
+        runCurrent()
+        assertNull(fixture.session.state.value.savedDiagnostic)
+        assertNull(fixture.session.state.value.metrics)
+        fixture.session.state.value.authorizedExit?.let { fixture.session.completeExit(it.id) }
+        fixture.session.selectVehicle(1L)
+        runCurrent()
+        assertNull(fixture.session.state.value.savedDiagnostic)
+        assertNull(fixture.session.state.value.savedDiagnosticId)
+        assertNull(fixture.session.state.value.metrics)
+    }
+
+    @Test
+    fun cancellingSecondScanKeepsFirstSavedAndMarksCancellationSeparately() = runTest {
+        val gateway = FakeGateway().apply { setState(ObdConnectionState.Connected(ObdConnectionConfig())) }
+        val fixture = Fixture(gateway, backgroundScope)
+        runCurrent()
+        fixture.session.scanDiagnostic()
+        runCurrent()
+        fixture.session.savePendingDiagnostic()
+        runCurrent()
+        val first = fixture.session.state.value.savedDiagnostic
+        gateway.scanGate = CompletableDeferred()
+        fixture.session.scanDiagnostic()
+        runCurrent()
+        assertEquals("scan", fixture.session.state.value.operation)
+        fixture.session.disconnect()
+        runCurrent()
+        assertEquals(first, fixture.session.state.value.savedDiagnostic)
+        assertEquals(1L, fixture.session.state.value.savedDiagnosticId)
+        assertTrue(fixture.session.state.value.scanCancelled)
+        assertNull(fixture.session.state.value.pendingDiagnostic)
+    }
+
+    @Test
+    fun exitDuringSaveWaitsForWriteWithoutAnotherPendingDecision() = runTest {
+        val gateway = FakeGateway().apply { setState(ObdConnectionState.Connected(ObdConnectionConfig())) }
+        val fixture = Fixture(gateway, backgroundScope)
+        runCurrent()
+        fixture.session.scanDiagnostic()
+        runCurrent()
+        fixture.diagnostics.saveGate = CompletableDeferred()
+        fixture.session.savePendingDiagnostic()
+        runCurrent()
+        fixture.session.requestExit(ExitAction.ToRoute("home"))
+        runCurrent()
+        assertNull(fixture.session.state.value.pendingDecision)
+        assertNull(fixture.session.state.value.authorizedExit)
+        fixture.diagnostics.saveGate!!.complete(Unit)
+        runCurrent()
+        assertNull(fixture.session.state.value.pendingDecision)
+        assertNull(fixture.session.state.value.pendingDiagnostic)
+        assertEquals(ExitAction.ToRoute("home"), fixture.session.state.value.authorizedExit?.action)
+        assertEquals(1, fixture.diagnostics.saveCalls)
     }
 
     @Test
@@ -310,6 +499,7 @@ class AppSessionTest {
         assertEquals(capture, fixture.session.state.value.pendingDiagnostic)
         assertNull(fixture.session.state.value.authorizedExit)
         assertTrue(fixture.session.state.value.error != null)
+        assertEquals(false, fixture.session.state.value.scanFailed)
         assertEquals(1, fixture.diagnostics.saveCalls)
     }
 
@@ -390,6 +580,9 @@ private class FakePreferences : AppPreferencesRepository {
     val active = MutableStateFlow<Long?>(1L)
     var failNextSet = false
     var setCalls = 0
+    var failNextConfigSave = false
+    var configSaveCalls = 0
+    var lastSavedConfig: ObdConnectionConfig? = null
     override val activeVehicleId: Flow<Long?> = active
     override val obdConnectionConfig = MutableStateFlow(ObdConnectionConfig()).asStateFlow()
     override val settings = MutableStateFlow(AppSettings()).asStateFlow()
@@ -398,7 +591,11 @@ private class FakePreferences : AppPreferencesRepository {
         if (failNextSet) { failNextSet = false; error("DataStore failed") }
         active.value = vehicleId
     }
-    override suspend fun saveObdConnectionConfig(config: ObdConnectionConfig) = Unit
+    override suspend fun saveObdConnectionConfig(config: ObdConnectionConfig) {
+        configSaveCalls++
+        if (failNextConfigSave) { failNextConfigSave = false; error("DataStore failed") }
+        lastSavedConfig = config
+    }
     override suspend fun saveSettings(settings: AppSettings) = Unit
 }
 
@@ -407,8 +604,12 @@ private class FakeGateway : ObdGateway {
     override val connectionState: StateFlow<ObdConnectionState> = mutableState.asStateFlow()
     var connectResult = CompletableDeferred<ObdResult<Unit>>()
     var disconnectCalls = 0
+    var connectCalls = 0
+    var scanResult: ObdResult<List<String>> = ObdResult.Success(emptyList())
+    var scanGate: CompletableDeferred<Unit>? = null
 
     override suspend fun connect(config: ObdConnectionConfig): ObdResult<Unit> {
+        connectCalls++
         mutableState.value = ObdConnectionState.Connecting
         return try {
             connectResult.await().also {
@@ -426,21 +627,25 @@ private class FakeGateway : ObdGateway {
         mutableState.value = ObdConnectionState.Disconnected
     }
     override suspend fun readLiveMetrics(): ObdResult<ObdLiveMetrics> =
-        ObdResult.Failure("not used")
-    override suspend fun readDiagnosticCodes(): ObdResult<List<String>> =
-        ObdResult.Success(emptyList())
+        ObdResult.Success(ObdLiveMetrics(0, null, 0, 1L))
+    override suspend fun readDiagnosticCodes(): ObdResult<List<String>> {
+        scanGate?.await()
+        return scanResult
+    }
     fun setState(state: ObdConnectionState) { mutableState.value = state }
 }
 
 private class FakeDiagnostics : DiagnosticRepository {
     var failSave = false
     var saveCalls = 0
+    var saveGate: CompletableDeferred<Unit>? = null
     override fun observeSessionsByVehicle(vehicleId: Long): Flow<List<DiagnosticSession>> =
         MutableStateFlow(emptyList())
     override suspend fun getLatestSession(vehicleId: Long): DiagnosticSession? = null
     override suspend fun getSessionById(sessionId: Long): DiagnosticSession? = null
     override suspend fun saveDiagnosticSessionAndAdvanceMileage(session: DiagnosticSession): Long {
         saveCalls++
+        saveGate?.await()
         if (failSave) error("DB failure")
         return 1L
     }

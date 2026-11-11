@@ -18,6 +18,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -73,7 +74,7 @@ fun VehiclesScreen(
     }
 
     Scaffold { padding ->
-        Column(Modifier.fillMaxSize().padding(padding).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Column(Modifier.fillMaxSize().padding(padding).padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
             Text("Vehículos", style = MaterialTheme.typography.headlineMedium)
             viewModel.formError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
             when {
@@ -88,17 +89,23 @@ fun VehiclesScreen(
                 }
                 else -> {
                     if (state.error != null) Text(state.error!!, color = MaterialTheme.colorScheme.error)
-                    LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                         items(state.vehicles, key = { it.id }) { vehicle ->
                             Card(Modifier.fillMaxWidth()) {
-                                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                    Text(listOf(vehicle.brand, vehicle.model).filter { it.isNotBlank() }.joinToString(" ").ifBlank { "Vehículo" })
+                                Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                                    Text(listOf(vehicle.brand, vehicle.model).filter { it.isNotBlank() }.joinToString(" ").ifBlank { "Vehículo" }, style = MaterialTheme.typography.titleLarge)
                                     Text(buildString {
                                         if (vehicle.year > 0) append(vehicle.year)
                                         append(if (isNotEmpty()) " · " else "")
                                         append("${vehicle.currentMileageKm} km")
-                                    })
-                                    if (vehicle.id == state.activeVehicleId) Text("Activo")
+                                    }, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    if (vehicle.id == state.activeVehicleId) {
+                                        Surface(color = MaterialTheme.colorScheme.secondaryContainer, shape = MaterialTheme.shapes.small) {
+                                            Text("Activo", Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+                                                color = MaterialTheme.colorScheme.onSecondaryContainer,
+                                                style = MaterialTheme.typography.labelMedium)
+                                        }
+                                    }
                                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                         if (vehicle.id != state.activeVehicleId) {
                                             OutlinedButton(onClick = {
@@ -143,8 +150,8 @@ fun VehiclesScreen(
 
 @Composable
 private fun VehicleForm(draft: VehicleDraft, viewModel: VehiclesViewModel, saving: Boolean, backendError: String?, onCancel: () -> Unit) {
-    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).imePadding().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text(if (draft.id == 0L) "Agregar vehículo" else "Editar vehículo", style = MaterialTheme.typography.headlineSmall)
+    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).imePadding().padding(20.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+        Text(if (draft.id == 0L) "Agregar vehículo" else "Editar vehículo", style = MaterialTheme.typography.headlineMedium)
         viewModel.formError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
         backendError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
         listOf(

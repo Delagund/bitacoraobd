@@ -63,6 +63,10 @@ data class AppSessionState(
     val activeVehicleId: Long? = null,
     val pendingDiagnostic: DiagnosticScanResult.Success? = null,
     val savedDiagnosticId: Long? = null,
+    val savedDiagnostic: DiagnosticScanResult.Success? = null,
+    val scanCancelled: Boolean = false,
+    val scanFailed: Boolean = false,
+    val connectedConfigSavePending: ObdConnectionConfig? = null,
     val metrics: Pair<Long, ObdLiveMetrics>? = null,
     val operation: String? = null,
     val sensitiveOperationRunning: Boolean = false,
@@ -117,10 +121,16 @@ class AppSession(
         val active = all.firstOrNull { it.id == stored } ?: all.firstOrNull()
         if (stored != active?.id) preferences.setActiveVehicleId(active?.id)
         contextRefreshFailed = false
+        val changedVehicle = mutableState.value.activeVehicleId != active?.id
         mutableState.value = mutableState.value.copy(
             vehicles = all,
             vehicleLoadStatus = VehicleLoadStatus.Ready,
             activeVehicleId = active?.id,
+            savedDiagnostic = if (changedVehicle) null else mutableState.value.savedDiagnostic,
+            savedDiagnosticId = if (changedVehicle) null else mutableState.value.savedDiagnosticId,
+            metrics = if (changedVehicle) null else mutableState.value.metrics,
+            scanCancelled = if (changedVehicle) false else mutableState.value.scanCancelled,
+            scanFailed = if (changedVehicle) false else mutableState.value.scanFailed,
             error = if (clearError) null else mutableState.value.error
         )
     }
@@ -294,12 +304,16 @@ class AppSession(
                     val activeId = preferences.activeVehicleId.first()
                     if (activeId == null || vehicles.getVehicleById(activeId) == null ||
                         sensitiveOperationRunning || pendingExit != null || mutableState.value.pendingDiagnostic != null ||
+                        mutableState.value.connectedConfigSavePending != null ||
                         gateway.connectionState.value !is ObdConnectionState.Disconnected
                     ) return@withLock
                     mutableState.value = mutableState.value.copy(operation = "connect", error = null)
                     try {
                         when (val result = gateway.connect(config)) {
-                            is ObdResult.Success -> Unit
+                            is ObdResult.Success -> {
+                                mutableState.value = mutableState.value.copy(connectedConfigSavePending = config)
+                                saveConnectedConfigLocked(config)
+                            }
                             is ObdResult.Failure -> mutableState.value = mutableState.value.copy(error = result.message)
                         }
                     } finally {
@@ -312,6 +326,26 @@ class AppSession(
         }
         connectJob = job
         job.start()
+    }
+
+    private suspend fun saveConnectedConfigLocked(config: ObdConnectionConfig) {
+        try {
+            preferences.saveObdConnectionConfig(config)
+            mutableState.value = mutableState.value.copy(connectedConfigSavePending = null, error = null)
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (error: Exception) {
+            mutableState.value = mutableState.value.copy(error = error.message ?: "No se pudo guardar la configuración")
+        }
+    }
+
+    fun retryConnectedConfigSave() {
+        scope.launch {
+            mutex.withLock {
+                val config = mutableState.value.connectedConfigSavePending ?: return@withLock
+                saveConnectedConfigLocked(config)
+            }
+        }
     }
 
     fun cancelConnection() {
@@ -400,13 +434,13 @@ class AppSession(
                     gateway.connectionState.value !is ObdConnectionState.Connected
                 ) return@withLock
                 val active = preferences.activeVehicleId.first() ?: return@withLock
-                mutableState.value = mutableState.value.copy(operation = "scan", error = null)
+                mutableState.value = mutableState.value.copy(operation = "scan", error = null, scanCancelled = false, scanFailed = false)
                 try {
                     when (val result = scanDiagnostic(active)) {
                         is DiagnosticScanResult.Success -> mutableState.value =
-                            mutableState.value.copy(pendingDiagnostic = result)
+                            mutableState.value.copy(pendingDiagnostic = result, savedDiagnostic = null, savedDiagnosticId = null, error = null)
                         is DiagnosticScanResult.Failure -> mutableState.value =
-                            mutableState.value.copy(error = result.message)
+                            mutableState.value.copy(error = result.message, scanFailed = true)
                     }
                 } finally {
                     mutableState.value = mutableState.value.copy(operation = null)
@@ -448,7 +482,7 @@ class AppSession(
             try {
                 val id = saveDiagnostic(pending) ?: error("Diagnostic capture was not saved")
                 if (mutableState.value.pendingDiagnostic?.captureId == pending.captureId) {
-                    mutableState.value = mutableState.value.copy(pendingDiagnostic = null, savedDiagnosticId = id, error = null)
+                    mutableState.value = mutableState.value.copy(pendingDiagnostic = null, savedDiagnostic = pending, savedDiagnosticId = id, error = null)
                 }
             } catch (cancelled: CancellationException) {
                 throw cancelled
@@ -467,8 +501,25 @@ class AppSession(
         decision?.complete(choice)
     }
 
+    fun discardPendingDiagnostic() {
+        if (saveJob?.isActive == true || decision?.isActive == true) return
+        mutableState.value = mutableState.value.copy(pendingDiagnostic = null, error = null)
+    }
+
     fun disconnect() {
-        runSensitive(null) { cancelConnectingAndAwait(); gateway.disconnect() }
+        runSensitive(null) {
+            val reading = readJob
+            if (reading?.isActive == true) {
+                val cancelledScan = mutableState.value.operation == "scan"
+                reading.cancel()
+                gateway.disconnect()
+                reading.join()
+                readJob = null
+                if (cancelledScan) mutableState.value = mutableState.value.copy(scanCancelled = true)
+            }
+            cancelConnectingAndAwait()
+            gateway.disconnect()
+        }
     }
 
     fun requestExit(action: ExitAction) {
@@ -480,10 +531,12 @@ class AppSession(
         if (gateway.connectionState.value is ObdConnectionState.Connecting) cancelConnectingAndAwait()
         val reading = readJob
         if (reading?.isActive == true) {
+            val cancelledScan = mutableState.value.operation == "scan"
             reading.cancel()
-            if (mutableState.value.operation == "scan") runCatching { gateway.disconnect() }
+            if (cancelledScan) runCatching { gateway.disconnect() }
             reading.join()
             readJob = null
+            if (cancelledScan) mutableState.value = mutableState.value.copy(scanCancelled = true)
         }
         authorizeExit(action)
         }
@@ -511,6 +564,10 @@ class AppSession(
         scope.launch {
             try {
                 while (true) {
+                    if (saveJob?.isActive == true) {
+                        saveJob?.join()
+                        if (mutableState.value.error != null) return@launch
+                    }
                     while (true) {
                         val capture = mutableState.value.pendingDiagnostic ?: break
                         val deferred = CompletableDeferred<PendingChoice>()

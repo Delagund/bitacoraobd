@@ -3,6 +3,8 @@ package cl.cristian.bitacoraobd
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.performClick
 import cl.cristian.bitacoraobd.ui.ExitAction
 import cl.cristian.bitacoraobd.ui.PendingChoice
@@ -57,7 +59,7 @@ class MainActivityRecreationTest {
         composeRule.waitUntil(5_000) { fixture.vehicles.saveStarted.isCompleted }
         composeRule.onNodeWithText("Mantenimiento").performClick()
         fixture.vehicles.saveGate?.complete(Unit)
-        composeRule.onNodeWithText("Maintenance").assertIsDisplayed()
+        composeRule.onAllNodesWithText("Mantenimiento").assertCountEquals(2)
     }
 
     @Test
@@ -112,7 +114,7 @@ class MainActivityRecreationTest {
         composeRule.activityRule.scenario.recreate()
         assertEquals(capture, session.state.value.pendingDiagnostic)
         fixture.diagnostics.allowSave.complete(Unit)
-        composeRule.onNodeWithText("History").assertIsDisplayed()
+        composeRule.onNodeWithText("Historial de diagnósticos").assertIsDisplayed()
         assertNull(session.state.value.pendingDiagnostic)
         assertNull(session.state.value.authorizedExit)
 
@@ -128,7 +130,7 @@ class MainActivityRecreationTest {
         }
         assertEquals(failedCapture, session.state.value.pendingDiagnostic)
         assertNull(session.state.value.authorizedExit)
-        composeRule.onNodeWithText("History").assertIsDisplayed()
+        composeRule.onNodeWithText("Historial de diagnósticos").assertIsDisplayed()
     }
 
     @Test
@@ -146,7 +148,7 @@ class MainActivityRecreationTest {
         composeRule.runOnUiThread {
             session.requestExit(ExitAction.ToRoute(AppRoute.SETTINGS))
         }
-        composeRule.onNodeWithText("Settings").assertIsDisplayed()
+        composeRule.onNodeWithText("Ajustes").assertIsDisplayed()
         assertNull(session.state.value.authorizedExit)
         assertNull(session.state.value.error)
     }
@@ -158,16 +160,16 @@ class MainActivityRecreationTest {
         composeRule.runOnUiThread {
             session.requestExit(ExitAction.ToRoute(AppRoute.CONNECTION))
         }
-        composeRule.onNodeWithText("Connection").assertIsDisplayed()
+        composeRule.onNodeWithText("Conecta el teléfono al Wi-Fi del adaptador").assertIsDisplayed()
         composeRule.runOnUiThread {
             session.requestExit(ExitAction.ToRoute(AppRoute.HOME))
         }
-        composeRule.onNodeWithText("Diagnostic").assertIsDisplayed()
+        composeRule.onAllNodesWithText("Diagnóstico").assertCountEquals(2)
         assertNull(session.state.value.authorizedExit)
 
         composeRule.activityRule.scenario.recreate()
 
-        composeRule.onNodeWithText("Diagnostic").assertIsDisplayed()
+        composeRule.onAllNodesWithText("Diagnóstico").assertCountEquals(2)
         assertSame(session, (composeRule.activity.application as BitacoraApplication).appSession)
         assertNull(session.state.value.authorizedExit)
     }

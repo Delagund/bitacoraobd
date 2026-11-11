@@ -28,8 +28,9 @@ class AppContainer(context: Context) {
     val maintenance by lazy { RoomMaintenanceRepository(database) }
     val gateway by lazy { Elm327ObdGateway() }
 
-    private val analyzeHistory by lazy { AnalyzeDiagnosticHistoryUseCase(diagnostics) }
-    private val maintenanceStatus by lazy { GetMaintenanceStatusUseCase(vehicles, maintenance) }
+    val analyzeHistory by lazy { AnalyzeDiagnosticHistoryUseCase(diagnostics) }
+    val maintenanceStatus by lazy { GetMaintenanceStatusUseCase(vehicles, maintenance) }
+    val saveMaintenance by lazy { cl.cristian.bitacoraobd.domain.usecase.SaveMaintenanceUseCase(vehicles, maintenance) }
     val scanDiagnostic by lazy { ScanDiagnosticCodesUseCase(gateway, vehicles) }
     val saveDiagnostic by lazy { SaveDiagnosticSessionUseCase(diagnostics) }
     val deleteVehicle by lazy { DeleteVehicleUseCase(vehicles, preferences, gateway) }

@@ -39,6 +39,38 @@ import org.junit.Test
 @OptIn(ExperimentalCoroutinesApi::class)
 class HomeViewModelTest {
     @Test
+    fun changingActiveVehicleUpdatesDashboardToTheNewVehicleContext() = runTest {
+        val dispatcher = StandardTestDispatcher(testScheduler)
+        Dispatchers.setMain(dispatcher)
+        try {
+            val first = Vehicle(1L, "First", "Car", 2020, "Gasoline", "2.0", 10)
+            val second = Vehicle(2L, "Second", "Car", 2021, "Diesel", "1.6", 20)
+            val vehicles = HomeVehicles(first, listOf(second))
+            val preferences = HomePreferences()
+            val diagnostics = HomeDiagnostics()
+            val maintenance = HomeMaintenance(emptyList())
+            val gateway = HomeGateway()
+            val dashboard = GetDashboardDataUseCase(
+                vehicles, preferences, diagnostics, maintenance, gateway,
+                GetMaintenanceStatusUseCase(vehicles, maintenance, MutableClock(Instant.EPOCH)),
+                AnalyzeDiagnosticHistoryUseCase(diagnostics)
+            )
+            val viewModel = HomeViewModel(dashboard)
+
+            viewModel.setActive(true)
+            advanceUntilIdle()
+            assertEquals(1L, (viewModel.state.value.dashboard as DashboardState.Ready).summary.activeVehicle.id)
+
+            preferences.active.value = 2L
+            advanceUntilIdle()
+
+            assertEquals(2L, (viewModel.state.value.dashboard as DashboardState.Ready).summary.activeVehicle.id)
+        } finally {
+            Dispatchers.resetMain()
+        }
+    }
+
+    @Test
     fun reactivationRecalculatesMaintenanceAgainstCurrentDateWithoutTimer() = runTest {
         val dispatcher = StandardTestDispatcher(testScheduler)
         Dispatchers.setMain(dispatcher)
@@ -92,6 +124,15 @@ class HomeViewModelTest {
                 (viewModel.state.value.dashboard as DashboardState.Ready)
                     .summary.activeMaintenanceSchedules.single().status
             )
+
+            val currentDashboard = viewModel.state.value.dashboard
+            diagnostics.failAfterEmission = true
+            viewModel.setActive(false)
+            advanceUntilIdle()
+            viewModel.setActive(true)
+            advanceUntilIdle()
+            assertEquals(currentDashboard, viewModel.state.value.dashboard)
+            assertEquals("diagnostic refresh failed", viewModel.state.value.error)
         } finally {
             Dispatchers.resetMain()
         }
@@ -104,16 +145,18 @@ private class MutableClock(var current: Instant) : Clock() {
     override fun instant(): Instant = current
 }
 
-private class HomeVehicles(private val vehicle: Vehicle) : VehicleRepository {
-    override fun observeVehicles(): Flow<List<Vehicle>> = MutableStateFlow(listOf(vehicle))
-    override fun observeVehicleById(vehicleId: Long): Flow<Vehicle?> = MutableStateFlow(vehicle.takeIf { it.id == vehicleId })
-    override suspend fun getVehicleById(vehicleId: Long): Vehicle? = vehicle.takeIf { it.id == vehicleId }
+private class HomeVehicles(vehicle: Vehicle, additional: List<Vehicle> = emptyList()) : VehicleRepository {
+    private val all = listOf(vehicle) + additional
+    override fun observeVehicles(): Flow<List<Vehicle>> = MutableStateFlow(all)
+    override fun observeVehicleById(vehicleId: Long): Flow<Vehicle?> = MutableStateFlow(all.firstOrNull { it.id == vehicleId })
+    override suspend fun getVehicleById(vehicleId: Long): Vehicle? = all.firstOrNull { it.id == vehicleId }
     override suspend fun saveVehicle(vehicle: Vehicle): Long = vehicle.id
     override suspend fun deleteVehicle(vehicleId: Long) = Unit
 }
 
-private class HomePreferences : AppPreferencesRepository {
-    override val activeVehicleId: Flow<Long?> = MutableStateFlow<Long?>(1L)
+private class HomePreferences(initialVehicleId: Long? = 1L) : AppPreferencesRepository {
+    val active = MutableStateFlow(initialVehicleId)
+    override val activeVehicleId: Flow<Long?> = active
     override val obdConnectionConfig = MutableStateFlow(ObdConnectionConfig()).asStateFlow()
     override val settings = MutableStateFlow(AppSettings()).asStateFlow()
     override suspend fun setActiveVehicleId(vehicleId: Long?) = Unit
@@ -122,8 +165,12 @@ private class HomePreferences : AppPreferencesRepository {
 }
 
 private class HomeDiagnostics : DiagnosticRepository {
+    var failAfterEmission = false
     override fun observeSessionsByVehicle(vehicleId: Long): Flow<List<DiagnosticSession>> =
-        MutableStateFlow(emptyList())
+        kotlinx.coroutines.flow.flow {
+            emit(emptyList())
+            if (failAfterEmission) throw IllegalStateException("diagnostic refresh failed")
+        }
     override suspend fun getLatestSession(vehicleId: Long): DiagnosticSession? = null
     override suspend fun getSessionById(sessionId: Long): DiagnosticSession? = null
     override suspend fun saveDiagnosticSessionAndAdvanceMileage(session: DiagnosticSession): Long = 1L
