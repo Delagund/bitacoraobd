@@ -48,12 +48,24 @@ internal class TestSessionFixture {
 }
 
 internal class TestVehicles : VehicleRepository {
+    var saveStarted = CompletableDeferred<Unit>()
+    var saveGate: CompletableDeferred<Unit>? = null
+    var failSave = false
+    var saveCalls = 0
     private val vehicle = Vehicle(1L, "Test", "Vehicle", 2020, "Gasoline", "2.0", 100)
     override fun observeVehicles(): Flow<List<Vehicle>> = MutableStateFlow(listOf(vehicle))
     override fun observeVehicleById(vehicleId: Long): Flow<Vehicle?> =
         MutableStateFlow(vehicle.takeIf { it.id == vehicleId })
     override suspend fun getVehicleById(vehicleId: Long): Vehicle? = vehicle.takeIf { it.id == vehicleId }
-    override suspend fun saveVehicle(vehicle: Vehicle): Long = vehicle.id
+    override suspend fun saveVehicle(vehicle: Vehicle): Long {
+        saveCalls++
+        saveGate?.let {
+            saveStarted.complete(Unit)
+            it.await()
+        }
+        check(!failSave) { "Injected vehicle save failure" }
+        return if (vehicle.id == 0L) 2L else vehicle.id
+    }
     override suspend fun deleteVehicle(vehicleId: Long) = Unit
 }
 

@@ -16,6 +16,9 @@ import cl.cristian.bitacoraobd.domain.usecase.DeleteVehicleUseCase
 import cl.cristian.bitacoraobd.domain.usecase.SaveDiagnosticSessionUseCase
 import cl.cristian.bitacoraobd.domain.usecase.ScanDiagnosticCodesUseCase
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -66,6 +69,47 @@ class AppSessionTest {
         assertEquals(emptyList<Long>(), fixture.vehicles.deleted)
         assertEquals(0, gateway.disconnectCalls)
         assertNull(fixture.session.state.value.authorizedExit)
+    }
+
+    @Test
+    fun connectedActiveVehicleCannotBeOpenedOrSavedForEditing() = runTest {
+        val gateway = FakeGateway().apply { setState(ObdConnectionState.Connected(ObdConnectionConfig())) }
+        val fixture = Fixture(gateway, backgroundScope)
+        runCurrent()
+        val original = fixture.vehicles.getVehicleById(1L)!!
+
+        fixture.session.openVehicleEditor(1L)
+        runCurrent()
+        assertEquals(VehicleAction.OpenEditor, fixture.session.state.value.vehicleActionResult?.action)
+        assertTrue(fixture.session.state.value.vehicleActionResult?.error != null)
+        fixture.session.consumeVehicleResult(fixture.session.state.value.vehicleActionResult!!.id)
+
+        fixture.session.saveVehicle(original.copy(brand = "Changed"), original)
+        runCurrent()
+
+        assertEquals(VehicleAction.Save, fixture.session.state.value.vehicleActionResult?.action)
+        assertTrue(fixture.session.state.value.vehicleActionResult?.error != null)
+        assertEquals(0, fixture.vehicles.saveCalls)
+        assertEquals(0, gateway.disconnectCalls)
+    }
+
+    @Test
+    fun connectedNonActiveVehicleCanBeEditedWithoutDisconnecting() = runTest {
+        val gateway = FakeGateway().apply { setState(ObdConnectionState.Connected(ObdConnectionConfig())) }
+        val fixture = Fixture(gateway, backgroundScope)
+        runCurrent()
+        val original = fixture.vehicles.getVehicleById(2L)!!
+
+        fixture.session.openVehicleEditor(2L)
+        runCurrent()
+        assertEquals(null, fixture.session.state.value.vehicleActionResult?.error)
+        fixture.session.consumeVehicleResult(fixture.session.state.value.vehicleActionResult!!.id)
+
+        fixture.session.saveVehicle(original.copy(brand = "Changed"), original)
+        runCurrent()
+
+        assertEquals(1, fixture.vehicles.saveCalls)
+        assertEquals(0, gateway.disconnectCalls)
     }
 
     @Test
@@ -126,19 +170,76 @@ class AppSessionTest {
     }
 
     @Test
-    fun ordinaryVehicleAndDisconnectOperationsDoNotAuthorizeNavigation() = runTest {
+    fun cancelledFirstInsertRetainsCommittedVehicleIdForRecovery() = runTest {
+        val gateway = FakeGateway()
+        val gate = CompletableDeferred<Unit>()
+        val vehicles = GatedVehicleRepository(gate)
+        val preferences = FakePreferences().apply { active.value = null }
+        val diagnostics = FakeDiagnostics()
+        val sessionJob = Job()
+        val session = AppSession(
+            vehicles = vehicles,
+            preferences = preferences,
+            gateway = gateway,
+            scanDiagnostic = ScanDiagnosticCodesUseCase(gateway, vehicles),
+            saveDiagnostic = SaveDiagnosticSessionUseCase(diagnostics),
+            deleteVehicleUseCase = DeleteVehicleUseCase(vehicles, preferences, gateway),
+            scope = CoroutineScope(coroutineContext + sessionJob)
+        )
+        runCurrent()
+
+        session.saveVehicle(Vehicle(brand = "A", model = "B", year = 0, fuelType = "", engineDescription = "", currentMileageKm = 0))
+        runCurrent()
+        assertEquals(1, vehicles.saveCalls)
+
+        sessionJob.cancel()
+        gate.complete(Unit)
+        runCurrent()
+
+        assertEquals(1, vehicles.rows.value.size)
+        assertEquals(41L, session.state.value.vehicleActionResult?.vehicleId)
+        assertNull(session.state.value.authorizedExit)
+    }
+
+    @Test
+    fun selectingVehicleAuthorizesHomeAfterPersistenceAndOtherOperationsDoNotNavigate() = runTest {
         val gateway = FakeGateway()
         val fixture = Fixture(gateway, backgroundScope)
 
         runCurrent()
         fixture.session.selectVehicle(2L)
         runCurrent()
+        val selection = fixture.session.state.value.authorizedExit
+        assertEquals(ExitAction.ToRoute("home"), selection?.action)
+        fixture.session.completeExit(selection!!.id)
+
         fixture.session.deleteVehicle(1L)
         runCurrent()
         fixture.session.disconnect()
         runCurrent()
 
         assertNull(fixture.session.state.value.authorizedExit)
+    }
+
+    @Test
+    fun vehicleRecoveryReconcilesByReadingWithoutRepeatingSelectionWrite() = runTest {
+        val gateway = FakeGateway()
+        val fixture = Fixture(gateway, backgroundScope)
+        runCurrent()
+        fixture.preferences.failNextSet = true
+
+        fixture.session.selectVehicle(2L)
+        runCurrent()
+        val failed = fixture.session.state.value.vehicleActionResult
+        assertEquals(VehicleRecovery.Reconcile, failed?.recovery)
+        assertEquals(1, fixture.preferences.setCalls)
+
+        fixture.session.retryVehicleRecovery(failed!!.id)
+        runCurrent()
+
+        assertEquals(1L, fixture.preferences.active.value)
+        assertEquals(1, fixture.preferences.setCalls)
+        assertNull(fixture.session.state.value.vehicleActionResult)
     }
 
     @Test
@@ -166,11 +267,13 @@ class AppSessionTest {
         val capture = fixture.session.state.value.pendingDiagnostic
         assertTrue(capture != null)
         fixture.session.requestExit(ExitAction.ToRoute("history/1"))
+        assertTrue(fixture.session.state.value.sensitiveOperationRunning)
         runCurrent()
         fixture.session.resolvePending(PendingChoice.Stay)
         runCurrent()
         assertEquals(capture, fixture.session.state.value.pendingDiagnostic)
         assertNull(fixture.session.state.value.authorizedExit)
+        assertEquals(false, fixture.session.state.value.sensitiveOperationRunning)
     }
 
     @Test
@@ -229,6 +332,26 @@ class AppSessionTest {
     }
 }
 
+private class GatedVehicleRepository(private val gate: CompletableDeferred<Unit>) : VehicleRepository {
+    val rows = MutableStateFlow<List<Vehicle>>(emptyList())
+    var saveCalls = 0
+
+    override fun observeVehicles(): Flow<List<Vehicle>> = rows
+    override fun observeVehicleById(vehicleId: Long): Flow<Vehicle?> =
+        MutableStateFlow(rows.value.firstOrNull { it.id == vehicleId })
+    override suspend fun getVehicleById(vehicleId: Long): Vehicle? = rows.value.firstOrNull { it.id == vehicleId }
+    override suspend fun saveVehicle(vehicle: Vehicle): Long {
+        saveCalls++
+        gate.await()
+        val saved = vehicle.copy(id = 41L)
+        rows.value = rows.value + saved
+        return saved.id
+    }
+    override suspend fun deleteVehicle(vehicleId: Long) {
+        rows.value = rows.value.filterNot { it.id == vehicleId }
+    }
+}
+
 private class Fixture(gateway: FakeGateway, scope: kotlinx.coroutines.CoroutineScope) {
     val vehicles = FakeVehicles()
     val preferences = FakePreferences()
@@ -251,11 +374,12 @@ private class FakeVehicles : VehicleRepository {
     )
     val deleted = mutableListOf<Long>()
     var failDelete = false
+    var saveCalls = 0
     override fun observeVehicles(): Flow<List<Vehicle>> = MutableStateFlow(rows)
     override fun observeVehicleById(vehicleId: Long): Flow<Vehicle?> =
         MutableStateFlow(rows.firstOrNull { it.id == vehicleId })
     override suspend fun getVehicleById(vehicleId: Long): Vehicle? = rows.firstOrNull { it.id == vehicleId }
-    override suspend fun saveVehicle(vehicle: Vehicle): Long = vehicle.id
+    override suspend fun saveVehicle(vehicle: Vehicle): Long { saveCalls++; return vehicle.id }
     override suspend fun deleteVehicle(vehicleId: Long) {
         if (failDelete) error("Room write failed")
         deleted += vehicleId
@@ -264,10 +388,16 @@ private class FakeVehicles : VehicleRepository {
 
 private class FakePreferences : AppPreferencesRepository {
     val active = MutableStateFlow<Long?>(1L)
+    var failNextSet = false
+    var setCalls = 0
     override val activeVehicleId: Flow<Long?> = active
     override val obdConnectionConfig = MutableStateFlow(ObdConnectionConfig()).asStateFlow()
     override val settings = MutableStateFlow(AppSettings()).asStateFlow()
-    override suspend fun setActiveVehicleId(vehicleId: Long?) { active.value = vehicleId }
+    override suspend fun setActiveVehicleId(vehicleId: Long?) {
+        setCalls++
+        if (failNextSet) { failNextSet = false; error("DataStore failed") }
+        active.value = vehicleId
+    }
     override suspend fun saveObdConnectionConfig(config: ObdConnectionConfig) = Unit
     override suspend fun saveSettings(settings: AppSettings) = Unit
 }

@@ -2,7 +2,14 @@ package cl.cristian.bitacoraobd.ui.navigation
 
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.TextButton
+import androidx.activity.compose.BackHandler
 import androidx.compose.material3.Text
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Modifier
 import androidx.navigation.NavHostController
@@ -12,6 +19,8 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.navigation
 import androidx.navigation.navArgument
 import cl.cristian.bitacoraobd.ui.AppSession
+import cl.cristian.bitacoraobd.ui.vehicles.VehiclesScreen
+import cl.cristian.bitacoraobd.ui.vehicles.VehiclesViewModel
 import cl.cristian.bitacoraobd.ui.ExitAction
 import kotlinx.coroutines.CancellationException
 
@@ -40,7 +49,21 @@ object AppRoute {
 }
 
 @androidx.compose.runtime.Composable
-fun AppNavigation(navController: NavHostController, session: AppSession, onBackAtRoot: () -> Unit) {
+private fun EmptyVehicleDestination(title: String, session: AppSession) {
+    val state by session.state.collectAsState()
+    if (state.vehicleLoadStatus.name == "Ready" && state.vehicles.isEmpty()) {
+        androidx.compose.foundation.layout.Column {
+            Text(title)
+            Text("Agrega un vehículo para continuar")
+            androidx.compose.material3.Button(
+                onClick = { session.requestExit(ExitAction.ToRoute(AppRoute.VEHICLES)) }
+            ) { Text("Agregar vehículo") }
+        }
+    } else Text(title)
+}
+
+@androidx.compose.runtime.Composable
+fun AppNavigation(navController: NavHostController, session: AppSession, vehiclesViewModel: VehiclesViewModel, onBackAtRoot: () -> Unit) {
     LaunchedEffect(navController, session) {
         session.state.collect { state ->
             val exit = state.authorizedExit ?: return@collect
@@ -82,24 +105,75 @@ fun AppNavigation(navController: NavHostController, session: AppSession, onBackA
         }
     }
 
-    Scaffold { padding ->
+    val currentRoute by navController.currentBackStackEntryFlow.collectAsState(initial = navController.currentBackStackEntry)
+    val sessionState by session.state.collectAsState()
+    LaunchedEffect(sessionState.operation, sessionState.sensitiveOperationRunning, vehiclesViewModel.queuedExitRoute, vehiclesViewModel.queuedExitSaveSucceeded) {
+        if (sessionState.operation == null && !sessionState.sensitiveOperationRunning) vehiclesViewModel.settleQueuedExit()
+    }
+    BackHandler {
+        if (currentRoute?.destination?.route == AppRoute.VEHICLES) {
+            if (vehiclesViewModel.draft != null) vehiclesViewModel.requestBackFromForm()
+            else session.requestExit(ExitAction.Back)
+        } else session.requestExit(ExitAction.Back)
+    }
+    vehiclesViewModel.pendingLeaveRoute?.let {
+        AlertDialog(
+            onDismissRequest = vehiclesViewModel::keepEditing,
+            title = { Text("Descartar cambios") },
+            text = { Text("Se perderán los cambios del vehículo.") },
+            confirmButton = {
+                TextButton(onClick = { vehiclesViewModel.confirmLeave { session.requestExit(ExitAction.ToRoute(it)) } }) {
+                    Text("Descartar y salir")
+                }
+            },
+            dismissButton = { TextButton(onClick = vehiclesViewModel::keepEditing) { Text("Seguir editando") } }
+        )
+    }
+    Scaffold(
+        bottomBar = {
+            NavigationBar {
+                listOf(
+                    AppRoute.HOME to "Inicio",
+                    AppRoute.VEHICLES to "Vehículos",
+                    AppRoute.DIAGNOSTIC to "Diagnóstico",
+                    AppRoute.MAINTENANCE to "Mantenimiento"
+                ).forEach { (route, label) ->
+                    NavigationBarItem(
+                        selected = currentRoute?.destination?.route == route,
+                        onClick = { vehiclesViewModel.requestLeave(route) { session.requestExit(ExitAction.ToRoute(it)) } },
+                        label = { Text(label) },
+                        icon = {}
+                    )
+                }
+            }
+        }
+    ) { padding ->
         NavHost(
             navController = navController,
             startDestination = AppRoute.HOME,
             modifier = Modifier.padding(padding)
         ) {
-            composable(AppRoute.HOME) { Text("Home") }
-            composable(AppRoute.VEHICLES) { Text("Vehicles") }
+            composable(AppRoute.HOME) {
+                val state by session.state.collectAsState()
+                if (state.vehicleLoadStatus.name == "Ready" && state.vehicles.isEmpty()) {
+                    androidx.compose.material3.Button(
+                        onClick = { session.requestExit(ExitAction.ToRoute(AppRoute.VEHICLES)) }
+                    ) { Text("Agregar vehículo") }
+                } else {
+                    Text(if (state.vehicleLoadStatus.name == "Failed") "No se pudieron cargar los vehículos" else "Inicio")
+                }
+            }
+            composable(AppRoute.VEHICLES) { VehiclesScreen(session, vehiclesViewModel) }
             navigation(startDestination = AppRoute.DIAGNOSTIC, route = AppRoute.CONNECTION_GRAPH) {
-                composable(AppRoute.DIAGNOSTIC) { Text("Diagnostic") }
+                composable(AppRoute.DIAGNOSTIC) { EmptyVehicleDestination("Diagnostic", session) }
                 composable(AppRoute.CONNECTION) { Text("Connection") }
             }
-            composable(AppRoute.MAINTENANCE) { Text("Maintenance") }
+            composable(AppRoute.MAINTENANCE) { EmptyVehicleDestination("Maintenance", session) }
             composable(AppRoute.SETTINGS) { Text("Settings") }
             composable(
                 route = AppRoute.HISTORY,
                 arguments = listOf(navArgument("vehicleId") { type = NavType.LongType })
-            ) { Text("History") }
+            ) { EmptyVehicleDestination("History", session) }
             composable(
                 route = AppRoute.DIAGNOSTIC_DETAIL,
                 arguments = listOf(navArgument("sessionId") { type = NavType.LongType })

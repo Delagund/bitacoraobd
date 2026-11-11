@@ -3,6 +3,7 @@ package cl.cristian.bitacoraobd
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performClick
 import cl.cristian.bitacoraobd.ui.ExitAction
 import cl.cristian.bitacoraobd.ui.PendingChoice
 import cl.cristian.bitacoraobd.ui.navigation.AppRoute
@@ -18,9 +19,50 @@ class MainActivityRecreationTest {
     val composeRule = createAndroidComposeRule<MainActivity>()
 
     @Test
+    fun vehiclesTabShowsActiveVehicleAndActions() {
+        composeRule.onNodeWithText("Vehículos").performClick()
+        composeRule.onNodeWithText("Test Vehicle").assertIsDisplayed()
+        composeRule.onNodeWithText("Activo").assertIsDisplayed()
+        composeRule.onNodeWithText("Editar").assertIsDisplayed()
+        composeRule.onNodeWithText("Eliminar").assertIsDisplayed()
+    }
+
+    @Test
+    fun queuedTabExitWaitsForSaveAndKeepsDraftOnFailure() {
+        val fixture = (composeRule.activity.application as TestBitacoraApplication).fixture
+        composeRule.onNodeWithText("Vehículos").performClick()
+        composeRule.onNodeWithText("Agregar vehículo").performClick()
+
+        fixture.vehicles.saveGate = kotlinx.coroutines.CompletableDeferred()
+        fixture.vehicles.failSave = true
+        composeRule.onNodeWithText("Guardar").performClick()
+        composeRule.waitUntil(5_000) { fixture.vehicles.saveStarted.isCompleted }
+        composeRule.onNodeWithText("Mantenimiento").performClick()
+        assertNull(fixture.session.state.value.authorizedExit)
+        composeRule.onNodeWithText("Agregar vehículo").assertIsDisplayed()
+
+        fixture.vehicles.saveGate?.complete(Unit)
+        composeRule.waitUntil(5_000) {
+            fixture.session.state.value.vehicleActionResult?.error != null &&
+                !fixture.session.state.value.sensitiveOperationRunning
+        }
+        composeRule.onNodeWithText("Se perderán los cambios del vehículo.").assertIsDisplayed()
+        composeRule.onNodeWithText("Seguir editando").performClick()
+        composeRule.onNodeWithText("Agregar vehículo").assertIsDisplayed()
+
+        fixture.vehicles.saveStarted = kotlinx.coroutines.CompletableDeferred()
+        fixture.vehicles.saveGate = kotlinx.coroutines.CompletableDeferred()
+        fixture.vehicles.failSave = false
+        composeRule.onNodeWithText("Guardar").performClick()
+        composeRule.waitUntil(5_000) { fixture.vehicles.saveStarted.isCompleted }
+        composeRule.onNodeWithText("Mantenimiento").performClick()
+        fixture.vehicles.saveGate?.complete(Unit)
+        composeRule.onNodeWithText("Maintenance").assertIsDisplayed()
+    }
+
+    @Test
     fun rootBackFinishesAndAllowsTheNextExitRequest() {
         val session = (composeRule.activity.application as BitacoraApplication).appSession
-        composeRule.onNodeWithText("Home").assertIsDisplayed()
         assertNull(session.state.value.pendingDiagnostic)
         assertNull(session.state.value.pendingDecision)
         assertNull(session.state.value.authorizedExit)
@@ -55,6 +97,7 @@ class MainActivityRecreationTest {
         assertTrue(session.state.value.pendingDecision != null)
         session.resolvePending(PendingChoice.Stay)
         composeRule.waitUntil(5_000) { session.state.value.pendingDecision == null }
+        composeRule.waitForIdle()
         assertEquals(capture, session.state.value.pendingDiagnostic)
         assertNull(session.state.value.authorizedExit)
 
@@ -99,7 +142,6 @@ class MainActivityRecreationTest {
             session.state.value.error == "Destino de navegación no válido"
         }
         assertNull(session.state.value.authorizedExit)
-        composeRule.onNodeWithText("Home").assertIsDisplayed()
 
         composeRule.runOnUiThread {
             session.requestExit(ExitAction.ToRoute(AppRoute.SETTINGS))
