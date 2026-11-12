@@ -1,3 +1,9 @@
+# Preparación vigente — Automotive Dark
+
+2026-11-12: propuesta de migración visual, sin autorización de reimplementación. Plan técnico: [ui-migration-plan.md](designplans/ui-migration-plan.md). Auditoría: [current-presentation-audit.md](designplans/current-presentation-audit.md). Matriz de 31 variantes: [figma-compose-contract-map.md](designplans/figma-compose-contract-map.md). Requiere aprobación antes de código; preservar Domain/Data y resolver decisiones documentadas por etapa.
+
+---
+
 # Pre-Fase 4 — Preparación de diseño e integración
 
 **Plan vigente de etapa 4.6:** [Conexión y diagnóstico UI-03/04](designplans/implementation_plan_fase4_etapa4_6.md), PROPUESTO y pendiente de aprobación explícita antes de código. 4.5 está cerrada según reporte_fase4_etapa4_5.md. Auditoría estática y planificación documental, sin Gradle ni código. El historial siguiente se conserva.
