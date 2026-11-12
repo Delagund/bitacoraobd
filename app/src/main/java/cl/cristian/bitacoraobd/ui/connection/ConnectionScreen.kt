@@ -260,7 +260,7 @@ fun ConnectionScreen(
                                     Uri.parse("package:${context.packageName}")
                                 )
                             )
-                        }) { Text("Abrir ajustes de la aplicación") }
+                        }, colors = ButtonDefaults.textButtonColors(contentColor = PrototypeCardContent)) { Text("Abrir ajustes de la aplicación") }
                     }
                 }
             }

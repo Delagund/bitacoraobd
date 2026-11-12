@@ -587,3 +587,23 @@ Extensión del plan aprobada por el usuario con “Proceed” el 2026-11-11. La 
 - [x] C1. Revisión conectada encontró campos de Mantenimiento y acciones Outlined de bajo contraste sobre tarjetas; se corrigieron los campos y controles afectados, y la segunda revisión emitió APROBADO.
 - [x] C2. Confirmado que no se cambiaron contratos, persistencia, interacciones funcionales ni datos; sin dependencias nuevas, Domain/Data ni esquema Room.
 - [x] C3. Reporte formal de seguimiento actualizado en `reporte_fidelidad_prototipo.md`; límites y hallazgo de escala de fuente documentados.
+
+---
+
+## Fase 4.9 — Integración, validación y cierre (EN CURSO)
+
+Plan aprobado: [implementation_plan_fase4_etapa4_9.md](designplans/implementation_plan_fase4_etapa4_9.md).
+
+### Fase A — Coder
+- [x] Auditoría de cobertura: migración v1 por builder real, captura pendiente/recreación y simulación OBD JVM existentes; no se detectó defecto reproducido que requiera cambios.
+- [x] QA detectó contraste insuficiente en «Abrir ajustes de la aplicación» tras denegar LAN; Coder aplicó `PrototypeCardContent` en ConnectionScreen sin cambiar el Intent. `:app:compileDebugKotlin` y `:app:lintDebug` pasaron después del cambio.
+- [ ] Verificar la corrección en dispositivo y comprobar recreación durante conexión/lectura; resolver brechas demostradas durante validación integrada.
+
+### Fase B — Tester
+- [ ] Suite completa pendiente: `:app:testDebugUnitTest --rerun-tasks` 137/137, compilación AndroidTest exitosa; `:app:connectedDebugAndroidTest` en Pixel_10/API 37 agotó 300 s con ANR de System UI, sin resultado de suite. Lint y assemble exitosos con mayoría de tareas UP-TO-DATE; `git diff --check` exitoso.
+- [ ] Validar migración instrumentada, OBD remoto, permiso API 37 y regresión API 36. El fixture OBD existente solo corre en JVM; falta host compatible para `elm327Host`.
+- [ ] Inspeccionar recorridos, recreación, accesibilidad, temas, texto ampliado, teclado y ventanas: AVD dejó de aceptar adb; API 36 no disponible.
+
+### Fase C — QA/Ponytail
+- [ ] Revisar evidencia, código conectado y límites; resolver hallazgos.
+- [ ] Reconciliar plan general, completar checklist y generar reporte global solo al cumplir los criterios de cierre.

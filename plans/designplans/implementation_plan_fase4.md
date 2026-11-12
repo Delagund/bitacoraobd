@@ -132,10 +132,12 @@ Ambas son propuestas, no colores, licencia ni componentes aprobados. No exigir c
 
 **Puerta:** UI-01/07 DESIGN_READY y dependencias anteriores. Archivos `ui/home/`, `ui/settings/` propuestos; `GetDashboardDataUseCase` y preferencias ampliadas.
 
-- [ ] Coder: Inicio orden vehículo → mantenimiento → diagnóstico → métricas; vacío sin vehículos incluso tras borrar último; distinguir ausencia de diagnóstico de limpio; recurrencia solo etiqueta códigos analizados. Última lectura identificada por vehículo/fecha; null y cero distintos; recálculo al activar.
-- [ ] Coder: Ajustes con borrador común, Guardar, descarte, recuperación y defaults; convertir millas con un decimal a km entero más cercano solo cuando se edita, sin reescribir históricos.
-- [ ] Tester: cambio de vehículo aísla datos, carga/error y actualización con datos del contexto, cambio de día al reactivar, 10,0 millas → 16 km, unidad/nombre sin editar distancia conserva entero, error parcial conserva borrador.
-- [ ] QA: contrastar DD-29/36–41/45/46/48 y referencias; no atribuir persistencia tras muerte de proceso a captura temporal.
+- [x] Coder: Inicio orden vehículo → mantenimiento → diagnóstico → métricas; vacío sin vehículos incluso tras borrar último; distinguir ausencia de diagnóstico de limpio; recurrencia solo etiqueta códigos analizados. Última lectura identificada por vehículo/fecha; null y cero distintos; recálculo al activar.
+- [x] Coder: Ajustes con borrador común, Guardar, descarte, recuperación y defaults; convertir millas con un decimal a km entero más cercano solo cuando se edita, sin reescribir históricos.
+- [x] Tester: cambio de vehículo aísla datos, carga/error y actualización con datos del contexto, cambio de día al reactivar, 10,0 millas → 16 km, unidad/nombre sin editar distancia conserva entero, error parcial conserva borrador.
+- [x] QA: contrastar DD-29/36–41/45/46/48 y referencias; no atribuir persistencia tras muerte de proceso a captura temporal.
+
+Cierre funcional y límites de validación manual: [reporte 4.8](../reporte_fase4_etapa4_8.md).
 
 ## 11. Etapa 4.9 — Integración, validación y cierre
 
