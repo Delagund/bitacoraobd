@@ -1,5 +1,14 @@
 # Contratos Domain — línea base auditada
 
+## Contrato vigente B-02 — Elegibilidad de alertas APROBADA
+
+B-02 APROBADA (2026-11-12): conservar MaintenanceStatus; alertas derivadas en Domain: OTHER excluido; OVERDUE si fecha ≤ hoy o km actual ≥ límite; UPCOMING como alerta solo a 1–29 días calendario y sin límite vencido; a 30 días o más y km aún no alcanzado no hay alerta preventiva. Mantener programación visible aunque no genere alerta; excluir históricos no vigentes. Sin persistir alertas, cambiar Room/DataStore ni añadir polling.
+
+Entradas: tipo, registro vigente, fecha local actual (Clock), kilometraje actual y límites opcionales. Salida derivada: OVERDUE, UPCOMING o ausencia de alerta. Los límites ausentes no participan; no crear otro estado MaintenanceStatus. GetMaintenanceStatusUseCase conserva su semántica. El ensamblado actual de GetDashboardDataUseCase convierte todo estado no UNSCHEDULED en alerta: comportamiento previo que debe adaptarse, no evidencia de B-02 implementada.
+
+Pruebas: 31/30/29/1/0 días y fechas pasadas; km bajo/igual/superado; solo fecha/km; límites combinados; OTHER; sin límites; históricos no vigentes; reactivación y coherencia de consumidores. Esta sección prevalece sobre referencias históricas que equiparen programación UPCOMING y alerta.
+
+
 ## Cierre de composición 4.3 — 2026-11-10
 
 La etapa 4.3 está cerrada con QA APROBADO. El reporte de cierre confirma `AppSession` como propietario de Presentation, composición compartida por proceso, builder Room con `MIGRATION_1_2`, coordinación OBD/vehículo con Mutex y recolección de Inicio al activarse. Room y DataStore no forman una transacción; el estado real se refresca tras fallo parcial. La captura pendiente se conserva solo durante la vida del proceso. Ver [reporte_fase4_etapa4_3.md](../reporte_fase4_etapa4_3.md).

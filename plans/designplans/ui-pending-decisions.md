@@ -6,7 +6,9 @@ Fuentes: [matriz](figma-compose-contract-map.md), [contratos](domain-contracts.m
 
 ## Estado actualizado — confirmación del usuario
 
-B-01/A y B-03/A APROBADAS en chat. B-02 sigue abierta: el usuario solicita evaluar alertas solo a menos de 30 días en el backend; no aprobó B-02/A ni autorizó implementar una regla nueva. Los análisis siguientes conservan su trazabilidad; sus solicitudes históricas de aprobación para B-01/B-03 quedan resueltas.
+B-01/A, B-02 y B-03/A APROBADAS; sin bloqueantes funcionales identificados para iniciar etapa 0. B-02 APROBADA (2026-11-12): conservar MaintenanceStatus; alertas derivadas en Domain: OTHER excluido; OVERDUE si fecha ≤ hoy o km actual ≥ límite; UPCOMING como alerta solo a 1–29 días calendario y sin límite vencido; a 30 días o más y km aún no alcanzado no hay alerta preventiva. Mantener programación visible aunque no genere alerta; excluir históricos no vigentes. Sin persistir alertas, cambiar Room/DataStore ni añadir polling.
+
+Los análisis de contradicciones y alternativas siguientes son antecedentes superados por estas aprobaciones; no constituyen solicitudes vigentes.
 
 ## Hallazgos y resoluciones
 
@@ -20,7 +22,7 @@ Pantallas: UI-02 conectado (15:46), UI-03 edición; contrato Figma 67:134.
 5. Recomendación: A. Conserva asociación correcta de capturas y comportamiento vigente con el menor cambio.
 6. Aprobación solicitada: aceptar la adaptación de la maqueta a D2; no reabrir D2 como si careciera de aprobación. Bloquea únicamente la interpretación contradictoria de esa variante.
 
-### B-02 — Ventana de advertencia de mantenimiento
+### B-02 — APROBADA; antecedente de la ventana de advertencia
 Pantallas: UI-01, UI-08, UI-10 detalle/estado calculado y UI-11. Figma Documentation 50:16–17.
 
 1. Vigente: DD-08 y GetMaintenanceStatusUseCase consideran OVERDUE si fecha o km alcanzan su límite; UNSCHEDULED si no hay límites; UPCOMING en cualquier otro caso. No existe ventana de 30 días ni umbral de cercanía por kilómetros.
@@ -66,24 +68,10 @@ Pantallas: UI-03 y UI-09; documentación Figma 32:60–61 y 50:23.
 | A-07 | DD-08/44/47: OTHER sin alertas, estados derivados, límites absolutos y orden; DTC desconocido conserva código y orientación genérica. No atribuir gravedad por color. |
 | A-08 | Domain/Data/Room/DataStore/gateway y casos de uso se preservan por alcance explícito. No hay autorización para cambiar reglas con finalidad estética. |
 
-## Resolución solicitada
+## Resolución vigente
 
-B-01/A y B-03/A aprobadas: mantener bloqueo de edición del activo conectado y confirmar Cancelar solo con cambios. B-03 actualiza DD-30 y screen-flows donde indicaban descarte explícito directo; sin cambios se vuelve directamente. B-02 permanece BLOQUEANTE para modificar semántica de alertas.
+B-02 APROBADA (2026-11-12): conservar MaintenanceStatus; alertas derivadas en Domain: OTHER excluido; OVERDUE si fecha ≤ hoy o km actual ≥ límite; UPCOMING como alerta solo a 1–29 días calendario y sin límite vencido; a 30 días o más y km aún no alcanzado no hay alerta preventiva. Mantener programación visible aunque no genere alerta; excluir históricos no vigentes. Sin persistir alertas, cambiar Room/DataStore ni añadir polling.
 
-### Evaluación solicitada B-02 — menos de 30 días en backend
+B-01/A conserva D2. B-03/A confirma Cancelar con cambios y reemplaza descarte directo histórico de DD-30. La implementación B-02 está autorizada como excepción acotada a Domain, aún NO implementada. Evaluación anterior sustituida por el adjunto B02_aprobacion_plan_y_contratos.md leído íntegramente.
 
-El backend de esta aplicación es Domain local, no un servidor. GetMaintenanceStatusUseCase determina estados; GetDashboardDataUseCase actualmente convierte todo estado distinto de UNSCHEDULED en alerta. Por eso filtrar solo en Compose produciría discrepancias entre Inicio y Servicio.
-
-Propuesta para evaluar, NO aprobada para implementación: conservar MaintenanceStatus y sus tres valores para describir la programación, pero derivar centralmente en Domain la elegibilidad de alerta. Siempre alertar OVERDUE por fecha o kilómetros; alertar anticipadamente por fecha solo cuando falten entre 1 y 29 días calendario. A 30 días exactos no alertar: «menos de 30» es estricto. Hoy y fechas pasadas son vencimiento, no aviso futuro. OTHER continúa excluido. Una programación a 60 días sigue existiendo y visible en Servicio aunque no genere alerta; ausencia de alerta no significa ausencia de programación.
-
-Límite kilométrico: mantener alerta cuando se alcanza o supera el límite, incluso sin fecha. No inferir días restantes desde kilómetros ni añadir un umbral preventivo no solicitado. Si coexisten fecha y km, el vencimiento de cualquiera prevalece sobre la ventana temporal.
-
-Alternativa: añadir un nuevo estado de programación lejana a MaintenanceStatus. Tiene mayor impacto en modelos, consumidores y pruebas; no es necesario si solo cambia cuándo se genera una alerta. No modificar esquema Room/DataStore ni persistir alertas derivadas.
-
-Impacto previsto: Domain (política compartida de elegibilidad y composición Dashboard); Presentation (consumir misma decisión en Inicio/Servicio/Alertas y distinguir programación de alerta); pruebas de dominio y regresión. Reutilizar Clock y actualización al reactivar Inicio (DD-41), sin temporizador ni polling nuevo.
-
-Criterios para el futuro plan: probar 31/30/29/1/0 días, fecha pasada, límite km por debajo/igual/superado, solo km, límites combinados, OTHER y registros históricos no vigentes. Comprobar que alertas e indicadores de todas las pantallas usan la misma política.
-
-Decisión pendiente: ratificar esta definición de alerta temporal (1–29 días, vencidas siempre, km al alcanzar límite) antes de elaborar el cambio ejecutable. La solicitud actual autoriza evaluar, no cambiar contratos ni código.
-
-No se modificó la matriz ni la documentación contractual histórica en esta ejecución: su actualización debe reflejar las resoluciones explícitas. No se ejecutaron compilación, pruebas, prototipo interactivo ni validación en hardware; el contraste fue estático y documental, con lectura MCP de contratos textuales Figma.
+Pruebas obligatorias: 31/30/29/1/0 días y negativos; km bajo/igual/superado; solo fecha, solo km, ambos límites con precedencia; OTHER; sin límites; históricos; reactivación de Inicio y coherencia entre consumidores.

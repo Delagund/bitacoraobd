@@ -4,7 +4,7 @@
 
 - **B-01/A APROBADA:** conservar D2; la edición del vehículo activo conectado permanece bloqueada. Adaptar la variante Figma, sin desbloquear por motivos visuales.
 - **B-03/A APROBADA:** Cancelar explícito en formularios de vehículos y mantenimiento confirma descarte si existen cambios; sin cambios vuelve directamente. Esta resolución sustituye las menciones históricas de DD-30 y screen-flows que indicaban descarte directo al cancelar. Seguir editando conserva borrador; Descartar vuelve sin alterar original. No cambia guardias OBD/diagnóstico.
-- **B-02 EN EVALUACIÓN:** estudiar elegibilidad de alertas a menos de 30 días en Domain local. No se ha aprobado implementación ni modificación de reglas; véase [evaluación y límites](ui-pending-decisions.md).
+- **B-02 APROBADA (2026-11-12): conservar MaintenanceStatus; alertas derivadas en Domain: OTHER excluido; OVERDUE si fecha ≤ hoy o km actual ≥ límite; UPCOMING como alerta solo a 1–29 días calendario y sin límite vencido; a 30 días o más y km aún no alcanzado no hay alerta preventiva. Mantener programación visible aunque no genere alerta; excluir históricos no vigentes. Sin persistir alertas, cambiar Room/DataStore ni añadir polling.** Estado de programación y elegibilidad de alerta son conceptos distintos. Reevaluar al reactivar Inicio según DD-41; compartir política entre Inicio/Servicio/Alertas. Excepción Domain autorizada expresamente por el usuario y su adjunto; todavía no implementada.
 
 ## Decisiones funcionales de etapa 4.4 — confirmadas por el usuario
 
