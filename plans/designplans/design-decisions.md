@@ -1,5 +1,11 @@
 # Registro de decisiones y discrepancias
 
+## Resoluciones Automotive Dark — 2026-11-12
+
+- **B-01/A APROBADA:** conservar D2; la edición del vehículo activo conectado permanece bloqueada. Adaptar la variante Figma, sin desbloquear por motivos visuales.
+- **B-03/A APROBADA:** Cancelar explícito en formularios de vehículos y mantenimiento confirma descarte si existen cambios; sin cambios vuelve directamente. Esta resolución sustituye las menciones históricas de DD-30 y screen-flows que indicaban descarte directo al cancelar. Seguir editando conserva borrador; Descartar vuelve sin alterar original. No cambia guardias OBD/diagnóstico.
+- **B-02 EN EVALUACIÓN:** estudiar elegibilidad de alertas a menos de 30 días en Domain local. No se ha aprobado implementación ni modificación de reglas; véase [evaluación y límites](ui-pending-decisions.md).
+
 ## Decisiones funcionales de etapa 4.4 — confirmadas por el usuario
 
 - **D1:** el alta del primer vehículo iniciada desde Diagnóstico o Mantenimiento vuelve a Inicio después de guardarlo y seleccionarlo. Si falla la selección se conserva el ID y se reintenta sin duplicar.
