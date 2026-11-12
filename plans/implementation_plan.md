@@ -1,6 +1,6 @@
 # Preparación vigente — Automotive Dark
 
-2026-11-12: propuesta de migración visual, sin autorización de reimplementación. Plan técnico: [ui-migration-plan.md](designplans/ui-migration-plan.md). Auditoría: [current-presentation-audit.md](designplans/current-presentation-audit.md). Matriz de 31 variantes: [figma-compose-contract-map.md](designplans/figma-compose-contract-map.md). Requiere aprobación antes de código; preservar Domain/Data y resolver decisiones documentadas por etapa.
+2026-11-12: Etapa 1 AUTORIZADA expresamente: tokens y componentes compartidos Automotive Dark con previews; no sustituir pantallas, cambiar contratos ni implementar B-02 en esta etapa. Ejecución secuencial Coder → Tester → QA. Mantener tema/componentes legacy mientras nuevos consumidores se incorporan en etapas futuras. Plan técnico: [ui-migration-plan.md](designplans/ui-migration-plan.md). Auditoría: [current-presentation-audit.md](designplans/current-presentation-audit.md). Matriz de 31 variantes: [figma-compose-contract-map.md](designplans/figma-compose-contract-map.md). Requiere aprobación antes de código; preservar Domain/Data y resolver decisiones documentadas por etapa.
 
 ---
 

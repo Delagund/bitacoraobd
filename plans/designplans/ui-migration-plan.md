@@ -8,6 +8,10 @@
 
 **Tech Stack:** Kotlin, Compose, Material 3, Navigation Compose y pruebas existentes.
 
+## Etapa 1 — implementación autorizada y entregada
+
+Tokens y componentes base de etapas 1/2 consolidados en esta entrega por autorización explícita del usuario. Nuevos AutomotiveTheme.kt, AutomotiveComponents.kt y AutomotivePreviews.kt; tema oscuro opt-in para evitar migrar consumidores legacy. No se cambiaron Theme.kt/Type.kt/Color.kt/GraphiteCard ni pantallas. Revisión código APROBADA, 138 unitarias PASS y APK instrumentado compilado; QA integral pendiente sin dispositivo. Previews renderizadas 390/320 fuente1.5/600; altura de catálogo ampliada para mostrar vehículo completo. Informe: ../reporte_automotive_dark_etapa1.md. No comenzar sustitución de pantallas sin aprobación posterior.
+
 ## Estado y puertas de entrada
 
 Preparación documental completada para decisiones y línea base; sin cambios de producción. Evidencia de tokens y build en [etapa 0](automotive-dark-stage0.md). B-01/B-02/B-03 aprobadas. La colección Figma solo define Dark: conservar tema según sistema y esquema claro actual hasta contar con referencia clara verificable, sin inventar tokens. Ese límite impide afirmar fidelidad Automotive del modo claro, pero no impide implementar el oscuro.

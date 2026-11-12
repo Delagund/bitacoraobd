@@ -1,3 +1,17 @@
+# Automotive Dark — Etapa 1 (IMPLEMENTADA; QA integral pendiente)
+
+### Fase A — Código (Coder)
+- [x] Tokens, tema oscuro aislado y componentes compartidos con previews, manteniendo contratos legacy.
+### Fase B — Tests (Tester)
+- [x] Compilación debug y APK instrumentado; 138 unitarias PASS; 8 pares de contraste comprobados.
+- [ ] Ejecutar 3 instrumentadas nuevas y suite Android: no hay dispositivo conectado; no se atribuye PASS runtime.
+### Fase C — Code Review & QA (Ponytail Reviewer)
+- [x] Revisión código APROBADA sin bloqueantes; comparación visual de previews/Figma realizada.
+- [ ] QA integral en dispositivo: TalkBack, semántica runtime y fidelidad física pendientes.
+- [x] Informe etapa 1: reporte_automotive_dark_etapa1.md; detenerse sin migrar pantallas.
+
+---
+
 # Pre-Fase 4 — Checklist
 
 ## Fase 4 — Etapa 4.6: Conexión y diagnóstico UI-03/04 (CERRADA)
